@@ -169,125 +169,226 @@ MODEL_HINTS = {
 }
 
 @st.cache_resource(show_spinner=False)
-def load_generic_clip_gate():
-    """Optional generic CLIP gate for plant-vs-object screening."""
-    import torch
-    import open_clip
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model, _, preprocess = open_clip.create_model_and_transforms("ViT-B-32", pretrained="openai")
-    tokenizer = open_clip.get_tokenizer("ViT-B-32")
-    model = model.to(device).eval()
-    prompts = [
-        "a clear photograph of a plant", "a clear photograph of a tree", "a clear photograph of leaves",
-        "a clear photograph of a flower", "a clear photograph of a car or vehicle",
-        "a clear photograph of a person", "a clear photograph of an animal",
-        "a clear photograph of food", "a clear photograph of a building or furniture",
-        "a clear photograph of an electronic device or household object",
-    ]
-    with torch.no_grad():
-        t = model.encode_text(tokenizer(prompts).to(device))
-        t = t / t.norm(dim=-1, keepdim=True)
-    return device, model, preprocess, t
+def bioclip_text_features():
+    """Build an ensemble of BioCLIP text embeddings for every library plant.
 
-
-def generic_clip_gate(img: Image.Image):
-    """Return plant decision, score and margin using generic CLIP."""
-    device, model, preprocess, text_features = load_generic_clip_gate()
+    BioCLIP is documented to support zero-shot classification through OpenCLIP
+    text/image embeddings.  We use several short botanical prompts per plant
+    (common name, scientific name, and a visual description when available)
+    and average the normalized prompt embeddings.  This is substantially more
+    stable than relying on a single wording, while keeping the classifier
+    deterministic and free of API keys.
+    """
+    device, model, _, tokenizer = load_bioclip()
     import torch
+
+    prompt_rows = []
+    for p in PLANTS:
+        common = str(p.get("common_name", "")).strip()
+        scientific = str(p.get("scientific_name", "")).strip()
+        hint = str(MODEL_HINTS.get(common, "")).strip()
+        prompts = [
+            f"a photograph of {scientific}",
+            f"a photograph of the plant {common}",
+        ]
+        if hint:
+            prompts.append(f"a botanical photograph of {common}, showing {hint}")
+        else:
+            prompts.append(f"a botanical photograph of {common}")
+        prompt_rows.append(prompts)
+
+    # Encode in small batches so the 56-plant library remains memory-friendly.
+    plant_vectors = []
     with torch.no_grad():
-        x=preprocess(ImageOps.exif_transpose(img).convert("RGB")).unsqueeze(0).to(device)
-        f=model.encode_image(x); f=f/f.norm(dim=-1,keepdim=True)
-        logits=(100.0*f@text_features.T).squeeze(0)
-        probs=torch.softmax(logits,dim=0).cpu().numpy()
-    plant_score=float(np.max(probs[:4]))
-    object_score=float(np.max(probs[4:]))
-    margin=plant_score-object_score
-    # CLIP is used as a conservative rejector, not as proof that a plant is
-    # absent. This prevents false "not a plant" results for real plants under
-    # warm light, cluttered backgrounds, or unusual camera angles.
-    clearly_nonplant = object_score >= 0.78 and margin <= -0.18
-    return (not clearly_nonplant), plant_score, margin, probs
+        for prompts in prompt_rows:
+            tokens = tokenizer(prompts).to(device)
+            features = model.encode_text(tokens)
+            features = features / features.norm(dim=-1, keepdim=True)
+            feature = features.mean(dim=0, keepdim=True)
+            feature = feature / feature.norm(dim=-1, keepdim=True)
+            plant_vectors.append(feature)
+        text_features = torch.cat(plant_vectors, dim=0)
+        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+    return device, model, text_features
 
 
 @st.cache_resource(show_spinner=False)
-def bioclip_text_features():
-    """Create richer species-specific text features for every library plant."""
+def bioclip_gate_text_features():
+    """Build a small plant-vs-object vocabulary using the same BioCLIP model.
+
+    Keeping one biology vision model avoids loading two large CLIP models on
+    Community Cloud, which reduces memory pressure and first-run failures.
+    """
     device, model, _, tokenizer = load_bioclip()
     import torch
-    templates = [
-        "a photograph of {}",
-        "a clear photograph of {}",
-        "a botanical photograph of {}",
-        "a field photograph showing {}",
-        "a close-up photograph of {}",
+    plant_prompts = [
+        "a clear photograph of a living plant",
+        "a botanical photograph of leaves or foliage",
+        "a photograph of a potted plant",
+        "a photograph of a tree or shrub",
+        "a photograph of a flower or flowering plant",
+        "a close-up photograph of plant foliage",
     ]
-    features = []
-    for p in PLANTS:
-        cname=p["common_name"]
-        sname=p["scientific_name"]
-        hint=MODEL_HINTS.get(cname, "")
-        details="; ".join([
-            str(p.get("identification", "")),
-            str(p.get("leaf", "")),
-            str(p.get("flower", "")),
-            str(p.get("growth", "")),
-        ])
-        descriptions=[
-            f"{cname} ({sname})",
-            f"{cname} ({sname}): {hint or details}",
-        ]
-        prompt_features=[]
-        for desc in descriptions:
-            texts=tokenizer([t.format(desc) for t in templates]).to(device)
-            with torch.no_grad():
-                tf=model.encode_text(texts)
-                tf=tf/tf.norm(dim=-1,keepdim=True)
-                tf=tf.mean(dim=0)
-                tf=tf/tf.norm()
-            prompt_features.append(tf)
-        merged=torch.stack(prompt_features).mean(dim=0)
-        merged=merged/merged.norm()
-        features.append(merged)
-    return device, model, torch.stack(features)
+    object_prompts = [
+        "a photograph of a door or wall",
+        "a photograph of furniture or a room",
+        "a photograph of a car or vehicle",
+        "a photograph of a person",
+        "a photograph of an animal",
+        "a photograph of food",
+        "a photograph of a building",
+        "a photograph of an electronic device",
+        "a photograph of a household object",
+        "a photograph of pavement, floor or road",
+    ]
+    groups=[]
+    with torch.no_grad():
+        for prompts in (plant_prompts, object_prompts):
+            t=model.encode_text(tokenizer(prompts).to(device))
+            t=t/t.norm(dim=-1,keepdim=True)
+            t=t.mean(dim=0,keepdim=True)
+            t=t/t.norm(dim=-1,keepdim=True)
+            groups.append(t)
+    return device, model, groups[0], groups[1]
+
+
+def bioclip_gate(img: Image.Image):
+    """Use BioCLIP to screen plant vs obvious non-plant images across views."""
+    device, model, plant_text, object_text = bioclip_gate_text_features()
+    preprocess = load_bioclip()[2]
+    import torch
+    plant_scores=[]; object_scores=[]
+    with torch.no_grad():
+        for view in _analysis_views(img):
+            x=preprocess(view).unsqueeze(0).to(device)
+            f=model.encode_image(x); f=f/f.norm(dim=-1,keepdim=True)
+            plant_scores.append(float((100.0*f@plant_text.T).squeeze().cpu()))
+            object_scores.append(float((100.0*f@object_text.T).squeeze().cpu()))
+    ps=float(np.mean(plant_scores)); os=float(np.mean(object_scores)); margin=ps-os
+    # A margin, rather than a raw softmax probability, is used because the
+    # vocabulary is intentionally small and the model scores are not calibrated
+    # probabilities.
+    is_plant = margin >= 1.5 and ps >= 18.0
+    clearly_nonplant = os >= 24.0 and margin <= -1.0
+    return is_plant and not clearly_nonplant, ps, margin, {"plant_score":ps,"object_score":os}
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def reference_features_for_candidates(candidate_names: Tuple[str, ...]):
+    """Build a small cached support set from real reference plant photos."""
+    import torch
+    names = tuple(dict.fromkeys(str(x) for x in candidate_names if str(x)))[:8]
+    if not names:
+        return {}
+    photos = get_plant_photos(names)
+    device, model, preprocess, _ = load_bioclip()
+    result = {}
+    with torch.no_grad():
+        for p in PLANTS:
+            if p["common_name"] not in names:
+                continue
+            url = photos.get(p["scientific_name"].lower()) or photos.get(p["common_name"].lower())
+            if not url:
+                continue
+            raw = fetch_reference_image(url)
+            if not raw:
+                continue
+            try:
+                ref = Image.open(io.BytesIO(raw))
+                feats = []
+                for view in _analysis_views(ref)[:2]:
+                    x = preprocess(view).unsqueeze(0).to(device)
+                    f = model.encode_image(x)
+                    f = f / f.norm(dim=-1, keepdim=True)
+                    feats.append(f)
+                f = torch.cat(feats, dim=0).mean(dim=0, keepdim=True)
+                f = f / f.norm(dim=-1, keepdim=True)
+                result[p["common_name"]] = f.cpu().numpy()[0].astype(np.float32)
+            except Exception:
+                continue
+    return result
+
+
+def _focus_crop(img: Image.Image) -> Image.Image | None:
+    """Find a vegetation-rich crop so a wide camera frame does not hide the plant."""
+    im=ImageOps.exif_transpose(img).convert("RGB")
+    small=im.copy(); small.thumbnail((640,640))
+    a=np.asarray(small,dtype=np.float32)/255.0
+    r,g,b=a[...,0],a[...,1],a[...,2]
+    mx=a.max(axis=2); mn=a.min(axis=2); sat=np.divide(mx-mn,mx,out=np.zeros_like(mx),where=mx>1e-6)
+    green=(g>r*.96)&(g>b*1.04)&(g>.14)&(sat>.10)
+    # Also include common flower/leaf colors so flowering plants are not cropped out.
+    yellow=(r>.35)&(g>.30)&(b<.40)&(r>b*1.12)&(sat>.16)
+    red=(r>.40)&(r>g*1.18)&(r>b*1.18)&(sat>.18)
+    mask=green|yellow|red
+    ys,xs=np.where(mask)
+    if len(xs)<max(80,int(mask.size*.006)):
+        return None
+    x0,x1=int(xs.min()),int(xs.max()); y0,y1=int(ys.min()),int(ys.max())
+    pad=int(max(x1-x0,y1-y0)*.20)+8
+    x0=max(0,x0-pad); y0=max(0,y0-pad); x1=min(small.width,x1+pad+1); y1=min(small.height,y1+pad+1)
+    if (x1-x0)*(y1-y0) < small.width*small.height*.04:
+        return None
+    return im.crop((int(x0/small.width*im.width),int(y0/small.height*im.height),int(x1/small.width*im.width),int(y1/small.height*im.height)))
 
 
 def _analysis_views(img: Image.Image) -> List[Image.Image]:
-    """Create a small ensemble of views so background/pot color matters less."""
-    im = ImageOps.exif_transpose(img).convert("RGB")
-    w, h = im.size
-    views = [im]
-    # Center crop, preserving the plant when it is roughly centered.
-    side = int(min(w, h) * 0.78)
-    if side >= 160:
-        left = max(0, (w-side)//2); top = max(0, (h-side)//2)
-        views.append(im.crop((left, top, left+side, top+side)))
-    # Upper/central crop helps when a potted plant has a large pot/floor area.
-    if h > 220:
-        top_h = int(h * 0.78)
-        views.append(im.crop((0, 0, w, top_h)))
-    return views
+    """Use original, center, upper and vegetation-focused views for camera/gallery parity."""
+    im=ImageOps.exif_transpose(img).convert("RGB")
+    # Standardize orientation/size before either camera or gallery reaches the model.
+    im.thumbnail((1600,1600),Image.Resampling.LANCZOS)
+    views=[im]
+    w,h=im.size
+    side=int(min(w,h)*.78)
+    if side>=160:
+        left=max(0,(w-side)//2); top=max(0,(h-side)//2)
+        views.append(im.crop((left,top,left+side,top+side)))
+    if h>220:
+        views.append(im.crop((0,0,w,int(h*.82))))
+    focus=_focus_crop(im)
+    if focus is not None:
+        views.append(focus)
+        fw,fh=focus.size
+        side2=int(min(fw,fh)*.90)
+        if side2>=160:
+            views.append(focus.crop(((fw-side2)//2,(fh-side2)//2,(fw+side2)//2,(fh+side2)//2)))
+    return views[:5]
 
 
 def bioclip_rank(img: Image.Image, filename_hint: str = ""):
+    """Rank species using BioCLIP across multiple crops; filename_hint is never used for classification."""
     device, model, preprocess = load_bioclip()[:3]
     _, _, text_features = bioclip_text_features()
     import torch
-    image_features = []
+    image_features=[]
     with torch.no_grad():
         for view in _analysis_views(img):
-            x = preprocess(view).unsqueeze(0).to(device)
-            f = model.encode_image(x)
-            f = f / f.norm(dim=-1, keepdim=True)
+            x=preprocess(view).unsqueeze(0).to(device)
+            f=model.encode_image(x); f=f/f.norm(dim=-1,keepdim=True)
             image_features.append(f)
-        image_features = torch.cat(image_features, dim=0).mean(dim=0, keepdim=True)
-        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-        logits = (100.0 * image_features @ text_features.T).squeeze(0)
-        probs = torch.softmax(logits, dim=0).cpu().numpy()
-    order = np.argsort(-probs)
-    rows = [(PLANTS[i], float(probs[i])) for i in order]
-    # Do not use the filename as an identification signal. A file named
-    # "tulsi.jpg" can be renamed to anything, so the image itself must decide.
-    return rows
+        image_features=torch.cat(image_features,dim=0)
+        # Mean plus a small max-view contribution: this helps a leaf-rich crop matter
+        # when the original camera frame contains lots of background.
+        mean_feat=image_features.mean(dim=0,keepdim=True)
+        mean_feat=mean_feat/mean_feat.norm(dim=-1,keepdim=True)
+        mean_logits=(100.0*mean_feat@text_features.T).squeeze(0)
+        probs=torch.softmax(mean_logits,dim=0).cpu().numpy()
+
+    order=np.argsort(-probs); candidate_idx=order[:8]
+    candidate_names=tuple(PLANTS[i]["common_name"] for i in candidate_idx)
+    ref_features=reference_features_for_candidates(candidate_names)
+    query_vec=mean_feat.cpu().numpy()[0]
+    rows=[]
+    for i in candidate_idx:
+        p=PLANTS[i]; text_score=float(probs[i])
+        ref_vec=ref_features.get(p["common_name"])
+        ref_score=float(np.dot(query_vec,ref_vec)) if ref_vec is not None else None
+        ref_norm=((ref_score+1.0)/2.0) if ref_score is not None else text_score
+        # Text evidence remains primary; reference-image evidence breaks close ties.
+        combined=.72*text_score+.28*ref_norm
+        rows.append((p,combined,text_score,ref_score))
+    rows.sort(key=lambda x:x[1],reverse=True)
+    return [(p,float(score)) for p,score,_,_ in rows]
 
 
 def optional_vision_rank(img: Image.Image, filename_hint: str = ""):
@@ -297,23 +398,53 @@ def optional_vision_rank(img: Image.Image, filename_hint: str = ""):
         return [], False, f"{type(exc).__name__}: {exc}"
 
 
+def _strong_object_screen(img: Image.Image):
+    """Return the raw BioCLIP plant/object evidence for a final rejection check.
+
+    This is intentionally separate from the old conservative gate. A plant
+    identification result should not be discarded merely because a generic
+    plant-vs-object prompt set is uncertain. We only use this helper to reject
+    images when object evidence is decisively stronger.
+    """
+    device, model, plant_text, object_text = bioclip_gate_text_features()
+    preprocess = load_bioclip()[2]
+    import torch
+    plant_scores=[]; object_scores=[]
+    with torch.no_grad():
+        for view in _analysis_views(img):
+            x=preprocess(view).unsqueeze(0).to(device)
+            f=model.encode_image(x); f=f/f.norm(dim=-1,keepdim=True)
+            plant_scores.append(float((100.0*f@plant_text.T).squeeze().cpu()))
+            object_scores.append(float((100.0*f@object_text.T).squeeze().cpu()))
+    ps=float(np.mean(plant_scores)); os=float(np.mean(object_scores)); margin=ps-os
+    return device, model, ps, margin, {"plant_score":ps,"object_score":os}
+
+
 def vision_gate(img: Image.Image):
-    """Two-signal gate: never let a single CLIP mistake reject a plant photo."""
-    local_is_plant, local_score, local_reason, local_features = plant_gate(img)
+    """Conservative plant/object gate with a single shared BioCLIP model.
+
+    The local screen is deliberately only a fallback. If BioCLIP is available,
+    its plant-vs-object margin is the primary decision signal.
+    """
+    local_is_plant, local_score, local_reason, local_features=plant_gate(img)
     try:
-        clip_is_plant, clip_plant_score, margin, probs = generic_clip_gate(img)
-        if clip_is_plant:
-            return True, max(clip_plant_score, local_score), "Image passed the plant screening step", {"gate":"combined", "margin":margin}
-        # If CLIP calls an image a non-plant but the independent local visual
-        # screen sees clear plant-like evidence, keep the image. This specifically
-        # prevents warm lighting, flowers, pots, or unusual framing from causing
-        # false 'NO PLANT DETECTED' results. A car/random object without plant-like
-        # cues is still rejected.
-        if local_is_plant:
-            return True, local_score, "Plant-like visual evidence detected; continuing to species analysis", {"gate":"local_override", "margin":margin}
-        return False, clip_plant_score, "The image strongly appears to contain a non-plant object", {"gate":"combined", "margin":margin}
+        clip_is_plant, plant_score, margin, meta=bioclip_gate(img)
+        object_score=float(meta["object_score"])
+        if object_score >= 32.0 and margin <= -6.0:
+            return False, max(0.0,min(1.0,object_score/100.0)), "The photo appears to show an object rather than a plant", {"gate":"bioclip_object","margin":margin}
+        if clip_is_plant or margin > -6.0:
+            gate_score=max(0.0,min(1.0,0.5+margin/20.0))
+            return True, gate_score, "Image passed the plant screening step", {"gate":"bioclip_ensemble","margin":margin}
+        # For borderline BioCLIP results, require strong local foliage evidence.
+        if local_is_plant and local_features.get("leafy_green_ratio",0)>=.10 and local_features.get("edge",0)>=.10:
+            return True,local_score,"Plant-like foliage detected",{"gate":"strong_local_foliage","margin":margin}
+        return False,max(0.0,min(1.0,0.5+margin/20.0)),"The photo does not contain enough reliable plant evidence",{"gate":"conservative_reject","margin":margin}
     except Exception:
-        return local_is_plant, local_score, local_reason, {"gate":"local_fallback"}
+        # If the model cannot load, use a strict local fallback rather than
+        # returning a random plant class.
+        strong_local=(local_features.get("leafy_green_ratio",0)>=.12 and local_features.get("edge",0)>=.09) or (local_features.get("green_ratio",0)>=.18 and local_features.get("edge",0)>=.11)
+        return strong_local,local_score,("Plant-like foliage detected" if strong_local else "The photo does not contain enough reliable plant evidence"),{"gate":"local_strict_fallback"}
+
 
 # -----------------------------------------------------------------------------
 # Reliable offline-safe visual analysis
@@ -380,41 +511,134 @@ def clue_tokens(leaf_shape,leaf_texture,flowers,growth,thorns):
 
 
 def identify_locally(img: Image.Image, clues: List[str]) -> List[Tuple[dict,float]]:
+    """Conservative offline shortlist. Never invent a species from color alone.
+
+    Without the vision model there is not enough evidence for reliable species
+    identification from pixels alone, so this fallback only returns candidates
+    when the user supplied explicit botanical clues.
+    """
     f=rgb_features(img)
     rows=[]
     for p in PLANTS:
         text=" ".join(str(p.get(k,"")) for k in ["common_name","category","identification","leaf","flower","growth","similar"]).lower()
-        score=.02
-        # Broad visual evidence from the image.
-        cat=str(p.get("category","")).lower()
-        if f["green_ratio"]>.22: score+=.10
-        if "flower" in cat and (f["red_ratio"]+f["yellow_ratio"])>.035: score+=.035
-        if "succulent" in cat and f["sat"]>.32: score+=.025
-        if "fruit" in cat and f["yellow_ratio"]>.03: score+=.025
-        if "herb" in cat and f["green_ratio"]>.20: score+=.025
-        # Use user-supplied visual clues as a strong structured signal.
+        score=0.0
         for c in clues:
-            if c in text: score+=.07
-        # Do not guess a species from a single colour. Yellow/green pixels
-        # are shared by many plants and caused the earlier Mango -> Marigold
-        # failure. The offline matcher therefore remains conservative.
-        if "cactus" in text and f["green_ratio"]>.10: score+=.01
-        rows.append((p,float(score)))
+            if c in text:
+                score += .16
+        cat=str(p.get("category"," ")).lower()
+        # Image colors provide only weak category evidence; they can never
+        # create a species match by themselves.
+        if "flower" in cat and (f["red_ratio"]+f["yellow_ratio"])>.035: score+=.02
+        if "succulent" in cat and f["sat"]>.32: score+=.015
+        if "fruit" in cat and f["yellow_ratio"]>.03: score+=.01
+        if "herb" in cat and f["green_ratio"]>.20: score+=.01
+        if score>0: rows.append((p,float(score)))
     rows.sort(key=lambda x:x[1],reverse=True)
-    return rows
+    if not clues:
+        return []
+    # Require at least one meaningful clue match. Ties remain a shortlist, not
+    # a claimed identification.
+    return [r for r in rows[:6] if r[1]>=.16]
+
+
+def visual_health_screen(img: Image.Image) -> dict:
+    """Screen visible foliage for stress cues. This is not a disease diagnosis."""
+    focus=_focus_crop(img) or ImageOps.exif_transpose(img).convert("RGB")
+    small=focus.copy(); small.thumbnail((500,500))
+    a=np.asarray(small,dtype=np.float32)/255.0
+    r,g,b=a[...,0],a[...,1],a[...,2]
+    mx=a.max(axis=2); mn=a.min(axis=2); sat=np.divide(mx-mn,mx,out=np.zeros_like(mx),where=mx>1e-6)
+    green=(g>r*.94)&(g>b*1.04)&(g>.14)&(sat>.10)
+    yellow=(r>.38)&(g>.32)&(b<.40)&(r>b*1.10)&(sat>.16)
+    brown=(r>.20)&(g>.10)&(g<r*.78)&(b<g*.95)&(sat>.16)
+    dark=(mx<.18)&(sat>.05)
+    foliage=green|yellow|brown
+    area=max(float(foliage.mean()),.001)
+    yellow_f=float((yellow&foliage).mean()/area)
+    brown_f=float((brown&foliage).mean()/area)
+    dark_f=float((dark&foliage).mean()/area)
+    green_f=float((green&foliage).mean()/area)
+    if brown_f>=.16 or dark_f>=.12:
+        status="Possible visible leaf damage / stress signs"; level="Review closely"
+    elif yellow_f>=.20:
+        status="Possible yellowing / stress signs"; level="Monitor"
+    else:
+        status="No obvious visual stress signs detected"; level="Looks generally healthy in this photo"
+    return {"status":status,"level":level,"green":green_f,"yellow":yellow_f,"brown":brown_f,"dark":dark_f,"focus_used":focus is not img}
+
+
+def health_issue_text(p: dict, health: dict) -> str:
+    if "damage" in health["status"].lower():
+        return "Inspect the leaves for spots, rot, pests or physical damage. The plant profile lists these diseases/pests to watch for: " + str(p.get("diseases","Check the plant profile for common diseases."))
+    if "yellowing" in health["status"].lower():
+        return "Check soil moisture, drainage, light and pests before changing the watering routine. Yellowing has several possible causes."
+    return "No obvious stress pattern was detected in this photo; continue normal monitoring and use the species care profile below."
+
+
+def care_assessment(img: Image.Image, p: dict, health: dict) -> dict:
+    """Turn visible image evidence + the species profile into safe care guidance.
+
+    A single photograph cannot directly measure soil moisture, fertilizer levels,
+    growth rate, sunlight exposure or the presence of a specific pathogen. This
+    function therefore separates what the camera can screen from what the owner
+    must physically check, instead of presenting guesses as measurements.
+    """
+    y=float(health.get("yellow",0)); b=float(health.get("brown",0)); d=float(health.get("dark",0)); g=float(health.get("green",0))
+    stress = y >= .20 or b >= .16 or d >= .12
+    if b >= .16 or d >= .12:
+        visual_water = "Possible stress visible"
+        visual_water_detail = "Brown/dark foliage is visible. Check the soil with a finger or moisture meter and inspect drainage before watering."
+    elif y >= .20:
+        visual_water = "Check watering"
+        visual_water_detail = "Yellowing is visible. Check soil moisture and drainage; yellowing alone cannot prove overwatering or underwatering."
+    else:
+        visual_water = "No obvious water-stress pattern"
+        visual_water_detail = "The photo does not show a strong visible stress pattern. Soil moisture still needs a physical check."
+
+    nutrient = "No fertilizer diagnosis from photo"
+    nutrient_detail = "Fertilizer need cannot be measured from a photograph. Use the species fertilizer guidance and avoid adding fertilizer solely because a leaf looks yellow."
+    if y >= .20:
+        nutrient_detail += " Yellowing can have many causes, including light, watering, roots, age or nutrients."
+
+    disease = "No specific disease confirmed"
+    disease_detail = "The image can screen for visible damage, but it cannot confirm a disease or pathogen. For suspected disease, inspect the affected leaf closely and compare symptoms with the plant profile."
+    if b >= .16 or d >= .12:
+        disease = "Visible damage/stress — inspect closely"
+        disease_detail = "Visible brown/dark areas deserve a close-up inspection for leaf spots, rot, pests or physical injury. Do not treat based on color alone."
+
+    pest = "No obvious pest conclusion"
+    pest_detail = "Pests are not reliably confirmed from this photo. Inspect leaf undersides, stems and new growth for insects, webbing, scale or sticky residue before considering treatment."
+    if stress:
+        pest_detail += " Stress symptoms can overlap with pest and disease symptoms."
+
+    sunlight = str(p.get("light", "Use the plant profile for its light requirement."))
+    growth = "Growth rate cannot be measured from one photo"
+    growth_detail = "Take repeat photos from a similar distance and angle to track new leaves, height and overall growth over time."
+
+    return {
+        "water_status": visual_water, "water_detail": visual_water_detail,
+        "fertilizer_status": nutrient, "fertilizer_detail": nutrient_detail,
+        "disease_status": disease, "disease_detail": disease_detail,
+        "pest_status": pest, "pest_detail": pest_detail,
+        "sunlight_status": "Species light requirement", "sunlight_detail": sunlight,
+        "growth_status": growth, "growth_detail": growth_detail,
+    }
 
 
 def confidence_label(rows: List[Tuple[dict,float]]) -> Tuple[str,int]:
     if not rows:
         return "Needs confirmation", 0
-    top = rows[0][1]
-    second = rows[1][1] if len(rows) > 1 else 0.0
-    margin = max(0.0, top - second)
-    # These are UI confidence bands, not probabilities of correctness.
-    if margin >= .10 and top >= .20:
-        return "Strong candidate", min(90, max(70, int(70 + margin*120)))
-    if margin >= .045 and top >= .12:
-        return "Likely candidate", min(82, max(58, int(58 + margin*120)))
+    top=float(rows[0][1]); second=float(rows[1][1]) if len(rows)>1 else 0.0
+    margin=max(0.0,top-second)
+    # BioCLIP softmax scores across 56 classes are not calibrated probabilities.
+    # Convert rank separation into a bounded visual-match band instead of using
+    # an impossible absolute probability threshold.
+    if margin >= .055 and top >= .10:
+        return "Strong candidate", min(92,max(75,int(75+margin*220)))
+    if margin >= .025 and top >= .055:
+        return "Likely candidate", min(84,max(60,int(60+margin*240)))
+    if margin >= .012 and top >= .035:
+        return "Possible match", min(72,max(52,int(52+margin*260)))
     return "Needs confirmation", 50
 
 # -----------------------------------------------------------------------------
@@ -602,7 +826,7 @@ elif page=="Identify a Plant":
     t1,t2=st.tabs(["📷 Camera","🖼️ Gallery"])
     with t1:
         st.markdown('<div class="pc-upload-card"><div class="pc-upload-title">📷 Take a plant photo</div><div class="pc-upload-sub">Allow camera access when Chrome asks.</div></div>',unsafe_allow_html=True)
-        camera=st.camera_input("Camera", label_visibility="collapsed")
+        camera=st.camera_input("Camera", label_visibility="collapsed", resolution="720p", key="camera_input_v10")
         if camera is not None:
             st.session_state.selected_image_bytes = camera.getvalue()
             st.session_state.selected_image_source = "Camera"
@@ -610,7 +834,7 @@ elif page=="Identify a Plant":
             st.session_state.analysis = None
     with t2:
         st.markdown('<div class="pc-upload-card"><div class="pc-upload-title">🖼️ Choose from gallery</div><div class="pc-upload-sub">JPG, JPEG, PNG or WEBP • Use a clear photo.</div></div>',unsafe_allow_html=True)
-        uploaded=st.file_uploader("Gallery",type=["jpg","jpeg","png","webp"],label_visibility="collapsed")
+        uploaded=st.file_uploader("Gallery",type=["jpg","jpeg","png","webp"],label_visibility="collapsed", key="gallery_input_v10")
         if uploaded is not None:
             st.session_state.selected_image_bytes = uploaded.getvalue()
             st.session_state.selected_image_source = "Gallery"
@@ -633,8 +857,8 @@ elif page=="Identify a Plant":
                 with c4: growth=st.selectbox("Growth habit",["Not sure","Upright","Trailing/vining","Clumping","Tree/shrub","Rosette"],key="growth_v5")
                 with c5: thorns=st.selectbox("Thorns / spines",["Not sure","Present","Not visible"],key="thorns_v5")
 
-            st.markdown('<div class="pc-analyze-box"><div><b>Ready to identify this photo?</b><br><span>The app first screens for a likely plant, then compares the photo with the plant library using a biology vision model. The filename is never used to choose the plant.</span></div></div>',unsafe_allow_html=True)
-            analyze=st.button("🔎  ANALYZE IMAGE",type="primary",use_container_width=True,key="analyze_v5")
+            st.markdown('<div class="pc-analyze-box"><div><b>Ready to identify this photo?</b><br><span>The app compares the photo with the plant library using BioCLIP first, then rejects it only when there is strong evidence that it is a non-plant object. If BioCLIP is unavailable, the app uses a local fallback. The filename is never used to choose the plant.</span></div></div>',unsafe_allow_html=True)
+            analyze=st.button("🔎  ANALYZE IMAGE",type="primary",use_container_width=True,key="analyze_v10")
             cclear,_=st.columns([1,4])
             with cclear:
                 if st.button("Clear photo",use_container_width=True,key="clear_v5"):
@@ -646,19 +870,38 @@ elif page=="Identify a Plant":
 
             if analyze:
                 sharp,bright,mindim=image_quality(image)
-                if mindim<180 or bright<15 or bright>250 or sharp<8:
+                if mindim<140 or bright<10 or bright>252 or sharp<4:
                     st.session_state.analysis=None
                     st.markdown('<div class="pc-warning"><b>🟡 Photo quality is too low.</b><br>Use daylight and move closer so leaves, flowers or the whole plant are clearly visible.</div>',unsafe_allow_html=True)
                 else:
                     with st.spinner("Analyzing plant photo… first run may take longer while the vision model loads."):
-                        is_plant,score,reason,features=vision_gate(image)
-                        if not is_plant:
-                            st.session_state.analysis={"nonplant":True,"reason":reason,"score":score}
-                        else:
-                            clues=clue_tokens(leaf_shape,leaf_texture,flowers,growth,thorns)
-                            ai_rows, model_used, model_error = optional_vision_rank(image, st.session_state.get("selected_image_name", ""))
-                            if model_used and ai_rows:
-                                rows=ai_rows
+                        clues=clue_tokens(leaf_shape,leaf_texture,flowers,growth,thorns)
+                        # IMPORTANT: identify first, then use the plant/object model only
+                        # as a strong rejection check. The previous V12 version ran a
+                        # conservative gate first; that gate could reject genuine plants
+                        # (especially flowers, mango/tulsi and warm-lit photos) before
+                        # BioCLIP ever got a chance to identify them.
+                        ai_rows, model_used, model_error = optional_vision_rank(image, st.session_state.get("selected_image_name", ""))
+                        if model_used and ai_rows:
+                            rows=ai_rows
+                            # Keep the non-plant protection, but reject only when the
+                            # object evidence is decisively stronger than plant evidence.
+                            # BioCLIP scores are similarities, not calibrated probabilities.
+                            reject_object=False
+                            object_reason=""
+                            try:
+                                _, _, obj_plant_score, obj_margin, obj_meta = _strong_object_screen(image)
+                                if obj_meta.get("object_score",0.0) >= 32.0 and obj_margin <= -6.0:
+                                    reject_object=True
+                                    object_reason="The photo is much more consistent with a non-plant object than with plant imagery."
+                            except Exception:
+                                # Never turn a model-screening failure into a false
+                                # NO PLANT result. The species model already succeeded.
+                                pass
+
+                            if reject_object:
+                                st.session_state.analysis={"nonplant":True,"reason":object_reason,"score":0.0}
+                            else:
                                 if clues:
                                     adjusted=[]
                                     for p,s in rows:
@@ -668,15 +911,24 @@ elif page=="Identify a Plant":
                                     rows=sorted(adjusted,key=lambda x:x[1],reverse=True)
                                 label,conf=confidence_label(rows)
                                 model_note="BioCLIP biology vision model"
+                                health=visual_health_screen(image)
+                                care=care_assessment(image, rows[0][0], health)
+                                st.session_state.analysis={"rows":rows,"label":label,"conf":conf,"score":1.0,"model_note":model_note,"model_error":model_error,"health":health,"care":care,"species_unavailable":False}
+                        else:
+                            # BioCLIP could not run. Use the local visual screen only
+                            # as a plant-presence fallback; do not claim a species unless
+                            # the user supplied meaningful botanical clues.
+                            local_is_plant,local_score,local_reason,local_features=plant_gate(image)
+                            if not local_is_plant:
+                                st.session_state.analysis={"nonplant":True,"reason":local_reason,"score":local_score}
                             else:
-                                # Never hide a model failure. The local matcher is only a
-                                # shortlist and must not be presented as reliable species AI.
-                                rows=identify_locally(image,clues)
-                                rows=rows[:4]
+                                rows=identify_locally(image,clues)[:4]
                                 label="Needs confirmation"
                                 conf=50
                                 model_note="Offline shortlist — BioCLIP unavailable"
-                            st.session_state.analysis={"rows":rows,"label":label,"conf":conf,"score":score,"model_note":model_note,"model_error":model_error}
+                                health=visual_health_screen(image)
+                                care=care_assessment(image, rows[0][0], health) if rows else None
+                                st.session_state.analysis={"rows":rows,"label":label,"conf":conf,"score":local_score,"model_note":model_note,"model_error":model_error,"health":health,"care":care,"species_unavailable":(not rows)}
         except Exception as exc:
             st.session_state.analysis=None
             st.error(f"The selected image could not be read: {type(exc).__name__}. Please choose another JPG or PNG image.")
@@ -686,6 +938,13 @@ elif page=="Identify a Plant":
     result=st.session_state.analysis
     if result and result.get("nonplant"):
         st.markdown(f'<div class="pc-error"><b>🚫 NO PLANT DETECTED</b><br>{result["reason"]}. Try a photo where the plant fills more of the frame.</div>',unsafe_allow_html=True)
+    elif result and result.get("species_unavailable"):
+        st.markdown('<div class="pc-warning"><b>🌱 Plant detected, but species identification is temporarily unavailable.</b><br>No plant name was guessed. Check the internet connection and press <b>ANALYZE IMAGE</b> again, or add the optional leaf/flower clues to get a conservative shortlist.</div>',unsafe_allow_html=True)
+        health=result.get("health")
+        if health:
+            st.markdown("### 🩺 Visual health screening")
+            st.markdown(f'<div class="pc-result"><div class="pc-result-name" style="font-size:1.35rem">{health["level"]}</div><div class="pc-scientific">{health["status"]}</div></div>',unsafe_allow_html=True)
+            st.caption("Health screening is visual only and does not identify a disease.")
     elif result and result.get("rows"):
         top=result["rows"][0][0]
         st.success("🌱 PLANT PHOTO ACCEPTED")
@@ -704,6 +963,48 @@ elif page=="Identify a Plant":
                 plant_photo(p, photo_map=alt_map)
             with col2:
                 st.markdown(f'<div class="pc-card"><h3>{p["common_name"]}</h3><p><i>{p["scientific_name"]}</i><br>Visual score: {s:.3f}</p></div>',unsafe_allow_html=True)
+        health=result.get("health")
+        if health:
+            st.markdown("### 🩺 Visual health screening")
+            st.markdown(f'<div class="pc-result"><div class="pc-result-name" style="font-size:1.35rem">{health["level"]}</div><div class="pc-scientific">{health["status"]}</div></div>',unsafe_allow_html=True)
+            hc1,hc2,hc3,hc4=st.columns(4)
+            with hc1: st.metric("Green foliage",f'{health["green"]*100:.0f}%')
+            with hc2: st.metric("Yellowing",f'{health["yellow"]*100:.0f}%')
+            with hc3: st.metric("Brown/damaged",f'{health["brown"]*100:.0f}%')
+            with hc4: st.metric("Dark areas",f'{health["dark"]*100:.0f}%')
+            st.markdown(f'<div class="pc-warning"><b>Important:</b> {health_issue_text(top,health)}<br><small>This is a visual screening only, not a definitive disease diagnosis. A clear close-up of affected leaves is needed for more reliable assessment.</small></div>',unsafe_allow_html=True)
+        st.markdown("### 🩺 PlantCare check")
+        care=result.get("care") or care_assessment(image, top, health or visual_health_screen(image))
+        care_cards=[
+            ("💧 Water / hydration", care["water_status"], care["water_detail"]),
+            ("🌿 Fertilizer", care["fertilizer_status"], care["fertilizer_detail"]),
+            ("🦠 Disease", care["disease_status"], care["disease_detail"]),
+            ("🐛 Pests", care["pest_status"], care["pest_detail"]),
+            ("☀️ Sunlight", care["sunlight_status"], care["sunlight_detail"]),
+            ("📈 Growth", care["growth_status"], care["growth_detail"]),
+        ]
+        for start in range(0, len(care_cards), 3):
+            cols=st.columns(3)
+            for col,(title,status,detail) in zip(cols, care_cards[start:start+3]):
+                with col:
+                    st.markdown(f'<div class="pc-card"><h3>{title}</h3><p><b>{status}</b><br>{detail}</p></div>',unsafe_allow_html=True)
+
+        st.markdown("### 🌱 Species care requirements")
+        c1,c2,c3=st.columns(3)
+        with c1:
+            st.markdown(f'<div class="pc-card"><h3>💧 Watering</h3><p>{top.get("water", "See plant profile.")}</p></div>',unsafe_allow_html=True)
+        with c2:
+            st.markdown(f'<div class="pc-card"><h3>☀️ Light</h3><p>{top.get("light", "See plant profile.")}</p></div>',unsafe_allow_html=True)
+        with c3:
+            st.markdown(f'<div class="pc-card"><h3>💨 Humidity</h3><p>{top.get("humidity", "See plant profile.")}</p></div>',unsafe_allow_html=True)
+        c4,c5,c6=st.columns(3)
+        with c4:
+            st.markdown(f'<div class="pc-card"><h3>🌱 Soil</h3><p>{top.get("soil", "See plant profile.")}</p></div>',unsafe_allow_html=True)
+        with c5:
+            st.markdown(f'<div class="pc-card"><h3>🌿 Fertilizer guidance</h3><p>{top.get("fertilizer", "See plant profile.")}</p></div>',unsafe_allow_html=True)
+        with c6:
+            st.markdown(f'<div class="pc-card"><h3>🐛 Pests & diseases to watch</h3><p>{top.get("pests", "Inspect regularly for pests.")}<br><br>{top.get("diseases", "See plant profile for common diseases.")}</p></div>',unsafe_allow_html=True)
+        st.markdown('<div class="pc-info"><b>Important:</b> A single photo cannot directly measure soil moisture, fertilizer concentration, growth rate, sunlight exposure, or confirm a disease. PlantCare AI therefore labels these as checks or visual screens instead of pretending they are measured values.</div>',unsafe_allow_html=True)
         st.markdown("### 🌱 Plant profile")
         show_profile(top)
 
@@ -814,7 +1115,7 @@ elif page=="My Plants":
 
 elif page=="About":
     st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">ℹ️ About PlantCare AI</h1><p>A student project focused on plant identification, plant education and practical care information.</p></div>',unsafe_allow_html=True)
-    st.markdown('<div class="pc-card"><h3>PlantCare AI — Made by Aradhy Mundhe</h3><p>This project was created by <b>Aradhy Mundhe</b> as a student project for plant identification, plant education and practical plant care.</p></div><div class="pc-card"><h3>What changed in this updated version?</h3><p>• Added BioCLIP-based species matching with an automatic offline fallback.<br>• Kept the offline-safe local visual screening so a model-loading problem does not crash the app.<br>• Reworked the sidebar into clear, large navigation buttons.<br>• Converted the interface to a consistent white-and-green theme.<br>• Added clearer error messages, photo-quality checks and alternative matches.<br>• No OpenAI key, Gemini key or paid API is required.</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-card"><h3>PlantCare AI — Made by Aradhy Mundhe</h3><p>This project was created by <b>Aradhy Mundhe</b> as a student project for plant identification, plant education and practical plant care.</p></div><div class="pc-card"><h3>What changed in this updated version?</h3><p>• Added Multi-view BioCLIP species matching with camera/gallery normalization and conservative object rejection.<br>• Kept the offline-safe local visual screening so a model-loading problem does not crash the app.<br>• Reworked the sidebar into clear, large navigation buttons.<br>• Converted the interface to a consistent white-and-green theme.<br>• Added multi-view camera/gallery analysis, visual health screening, care requirements and clearer uncertainty messages.<br>• No OpenAI key, Gemini key or paid API is required.</p></div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-title">Sharing</div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-info"><b>For your teacher:</b> the easiest experience is a public hosted URL. A <code>localhost</code> address only works on the computer running PlantCare AI. The included launcher is for local use; online sharing requires deployment to a web host.</div>',unsafe_allow_html=True)
 
