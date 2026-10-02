@@ -1,0 +1,6 @@
+streamlit==1.64.0
+Pillow>=11.0,<13
+numpy>=1.26,<3
+torch>=2.5,<3
+open_clip_torch>=2.31,<3
+requests>=2.32,<3
