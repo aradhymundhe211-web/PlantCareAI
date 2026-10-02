@@ -1,0 +1,11 @@
+[server]
+maxUploadSize = 25
+enableXsrfProtection = true
+
+[theme]
+base = "light"
+primaryColor = "#138a4b"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f3fbf6"
+textColor = "#173225"
+font = "sans serif"
