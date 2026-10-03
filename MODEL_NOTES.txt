@@ -1,0 +1,18 @@
+PlantCare AI V13 Final Consolidated — model notes
+
+Model sources used by the app:
+- Imageomics BioCLIP: https://huggingface.co/imageomics/bioclip
+- OpenCLIP: https://pypi.org/project/open-clip-torch/
+- Streamlit: https://docs.streamlit.io/
+- PyTorch: https://pytorch.org/get-started/locally/
+
+BioCLIP is used through the OpenCLIP interface documented by Imageomics. The
+model is loaded lazily and cached. The app uses BioCLIP for zero-shot plant
+species matching and a separate prompt ensemble for strong non-plant rejection.
+The species result is never treated as a calibrated probability.
+
+Health/care analysis is intentionally conservative. Visible color/texture
+patterns are screening signals only; a single RGB photograph cannot directly
+measure soil moisture, fertilizer concentration, growth rate, light exposure,
+or confirm a disease/pathogen. The UI explicitly separates visual screening
+from species-specific care guidance.
