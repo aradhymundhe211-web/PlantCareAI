@@ -49,6 +49,7 @@ st.markdown(
     .pc-title{font-size:1.45rem;font-weight:900;color:var(--ink);margin:28px 0 12px}.pc-result{background:linear-gradient(180deg,#f5fcf7,#fff);border:1px solid #c9e5d1;border-radius:24px;padding:23px;box-shadow:0 10px 28px rgba(22,55,35,.06)}.pc-result-name{font-size:clamp(1.7rem,3vw,2.35rem);font-weight:950;color:var(--gd);margin:0}.pc-scientific{color:var(--muted);font-size:.93rem;margin-top:5px}.pc-badge{display:inline-block;background:var(--gm);color:#116335;border:1px solid #cde8d4;border-radius:999px;padding:6px 10px;font-size:.82rem;font-weight:850;margin-top:10px}
     .pc-info{background:#f5fbf7;border:1px solid var(--line);border-radius:16px;padding:14px 16px;line-height:1.5}.pc-warning{background:#fff8e8;border:1px solid #f0dd9b;color:#6e5513;border-radius:16px;padding:14px 16px}.pc-error{background:#fff1f1;border:1px solid #f1c5c5;color:#8a2020;border-radius:16px;padding:14px 16px}
     .pc-footer{text-align:center;color:#7b8c82;font-size:.78rem;padding:35px 0 15px}
+    .pc-page-byline{display:flex;align-items:center;justify-content:flex-end;gap:7px;color:#527063;font-size:.78rem;font-weight:850;margin:0 2px 12px}.pc-page-byline strong{color:#0b6b39}.pc-safety{background:#f3fbf6;border:1px solid #cce5d3;border-radius:16px;padding:12px 15px;margin:10px 0;color:#315f43;font-size:.84rem;line-height:1.5}.pc-home-grid{margin-top:8px}.pc-mini{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px 18px;box-shadow:0 8px 22px rgba(22,55,35,.045)}.pc-mini b{display:block;color:#0b6b39;font-size:1.1rem}.pc-mini span{display:block;color:#64766b;font-size:.8rem;margin-top:4px}
     .stButton>button{border-radius:13px!important;min-height:44px!important;border:1px solid #cfe2d5!important;font-weight:800!important;background:#fff!important;color:#173225!important}
     .stButton>button:hover{border-color:#7ab58d!important;color:#0b6b39!important}
     .stButton>button[kind="primary"]{background:linear-gradient(135deg,#168d4d,#0b6b39)!important;color:#fff!important;border:0!important;box-shadow:0 8px 18px rgba(22,141,77,.18)}
@@ -441,6 +442,77 @@ def bioclip_rank(img: Image.Image, filename_hint: str = ""):
     return [(p,float(score)) for p,score in rows]
 
 
+@st.cache_resource(show_spinner=False)
+def _general_object_model():
+    """Small general-domain ImageNet model used only as a non-plant safety gate.
+
+    BioCLIP is specialized for biological imagery, so it can sometimes give a
+    plant species a high score for an ordinary object. A general ImageNet
+    classifier provides an independent object signal before we accept a plant.
+    """
+    import torch
+    from torchvision.models import MobileNet_V3_Small_Weights, mobilenet_v3_small
+    weights = MobileNet_V3_Small_Weights.DEFAULT
+    model = mobilenet_v3_small(weights=weights).eval()
+    return model, weights.transforms(), tuple(weights.meta["categories"])
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def general_object_screen(img_bytes: bytes):
+    """Independent everyday-object gate. This runs before plant species matching."""
+    try:
+        import torch
+        model, preprocess, labels = _general_object_model()
+        im=Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        views=_analysis_views(im)[:4]
+        votes=[]
+        with torch.no_grad():
+            for view in views:
+                probs=torch.softmax(model(preprocess(view).unsqueeze(0)),dim=1)[0]
+                vals,idx=torch.topk(probs,8)
+                votes.append([(labels[int(i)].lower(),float(v)) for v,i in zip(vals,idx)])
+        flat=[item for vote in votes for item in vote]
+        flat.sort(key=lambda x:x[1],reverse=True)
+        top=flat[:12]
+        hard_nonplant=(
+            "car","jeep","sports car","minivan","pickup","truck","bus","motorcycle","bicycle","suv","station wagon","convertible","limousine",
+            "scooter","vehicle","airliner","aircraft","person","man","woman","boy","girl",
+            "laptop","computer","keyboard","mouse","monitor","screen","television","remote",
+            "cellular telephone","telephone","camera","microphone","refrigerator","washer","vacuum",
+            "radio","printer","book","notebook","envelope","building","streetcar","street sign",
+            "traffic light","parking meter","fire engine","ambulance","police van","school bus","desktop computer",
+            "desk","chair","table","bottle","cup","mug","backpack","shoe","clock","watch","car wheel"
+        )
+        plant_terms=(
+            "plant","tree","flower","daisy","rose","sunflower","leaf","cucumber","zucchini","corn",
+            "mushroom","bolete","strawberry","lemon","orange","banana","fig","pineapple","acorn",
+            "buckeye","potato","cauliflower","broccoli","head cabbage","bell pepper","artichoke","rapeseed"
+        )
+        hard_hits=[(name,score) for name,score in top if any(term in name for term in hard_nonplant)]
+        plant_hits=[(name,score) for name,score in top if any(term in name for term in plant_terms)]
+        hard_max=max((score for _,score in hard_hits),default=0.0)
+        plant_max=max((score for _,score in plant_hits),default=0.0)
+        top1=top[0][0] if top else ""
+        top1_score=top[0][1] if top else 0.0
+        # Hard everyday-object evidence wins unless there is similarly strong
+        # botanical evidence. This specifically prevents vehicles/people/etc.
+        # from reaching the 56-class BioCLIP species matcher.
+        reject=bool(
+            hard_hits and
+            (
+                (top1 in {n for n,_ in hard_hits} and top1_score >= 0.18 and plant_max < 0.18) or
+                (hard_max >= 0.28 and hard_max >= plant_max * 1.35) or
+                (hard_max >= 0.42)
+            )
+        )
+        reason=f"General vision screening recognized a non-plant object ({top1})." if reject else ""
+        return reject,reason,{"top":top,"top1":top1,"top1_score":top1_score,"hard_hits":hard_hits,"plant_hits":plant_hits,"hard_max":hard_max,"plant_max":plant_max}
+    except Exception as exc:
+        # Safety rule: if the independent object gate cannot run, do not silently
+        # allow BioCLIP to force an object into a plant species.
+        return True, f"Smart Rejection could not verify the image as a plant ({type(exc).__name__}). Please try Analyze again.", {"error":f"{type(exc).__name__}: {exc}", "gate_unavailable": True}
+
+
 def optional_vision_rank(img: Image.Image, filename_hint: str = ""):
     try:
         return bioclip_rank(img, filename_hint), True, ""
@@ -471,32 +543,44 @@ def _strong_object_screen(img: Image.Image):
 
 
 def vision_gate(img: Image.Image):
-    """Multi-signal plant-presence gate for model-unavailable fallback."""
+    """Conservative plant-presence gate used when the species model is unavailable."""
     local_is_plant,local_score,local_reason,local_features=plant_gate(img)
     sharp,bright,mindim=image_quality(img)
-    if mindim<140 or bright<8 or bright>253 or sharp<3:
+    if mindim<180 or bright<8 or bright>253 or sharp<3:
         return False,0.0,"The photo quality is too low for reliable plant detection",{"gate":"quality"}
+    try:
+        # Independent general-object screen first. If it sees a car/person/etc.,
+        # never allow the biology classifier to force a species.
+        raw=io.BytesIO(); ImageOps.exif_transpose(img).convert("RGB").save(raw,format="JPEG",quality=92); raw=raw.getvalue()
+        reject_general,general_reason,general_meta=general_object_screen(raw)
+        if reject_general:
+            return False,0.0,general_reason,{"gate":"general_object","general":general_meta}
+    except Exception:
+        general_meta={"error":"general object model unavailable"}
     try:
         clip_is_plant,plant_score,margin,meta=bioclip_gate(img); object_score=float(meta["object_score"])
         try:
             cps,cts,ctx_margin,doc_score=bioclip_context_screen(img)
         except Exception:
             cps,cts,ctx_margin,doc_score=plant_score,0.0,plant_score,_document_visual_score(img)
-        if (cts>=31.0 and ctx_margin<=-2.0) or (doc_score>=.72 and ctx_margin<3.0):
+        if (cts>=29.0 and ctx_margin<=-1.5) or (doc_score>=.70 and ctx_margin<3.0):
             return False,doc_score,"The image appears to contain mostly text or document content",{"gate":"document_screen","document_score":doc_score}
-        if object_score>=32.0 and margin<=-6.0:
+        if object_score>=29.0 and margin<=-3.5:
             return False,max(0,min(1,object_score/100)),"The photo appears to show an object rather than a plant",{"gate":"bioclip_object","margin":margin}
-        if clip_is_plant and margin>=1.5:
+        if clip_is_plant and margin>=2.0:
             return True,max(0,min(1,.5+margin/20)),"Plant-like imagery detected",{"gate":"bioclip_ensemble","margin":margin}
-        if local_is_plant and local_features.get("leafy_green_ratio",0)>=.10 and local_features.get("edge",0)>=.10:
+        # Fallback foliage must be reasonably strong, not merely green-colored.
+        strong_local=(local_features.get("leafy_green_ratio",0)>=.13 and local_features.get("edge",0)>=.10 and local_features.get("green_ratio",0)>=.08)
+        if strong_local:
             return True,local_score,"Plant-like foliage detected",{"gate":"strong_local_foliage","margin":margin}
         return False,max(0,min(1,.5+margin/20)),"The image does not contain enough reliable plant evidence",{"gate":"conservative_reject","margin":margin}
     except Exception:
+        # Fail closed rather than guessing a species from color alone.
+        strong_local=(local_features.get("leafy_green_ratio",0)>=.16 and local_features.get("edge",0)>=.11 and local_features.get("green_ratio",0)>=.10)
         doc_score=_document_visual_score(img)
-        strong_local=((local_features.get("leafy_green_ratio",0)>=.12 and local_features.get("edge",0)>=.09) or (local_features.get("green_ratio",0)>=.18 and local_features.get("edge",0)>=.11))
-        if doc_score>=.70 and not strong_local:
-            return False,doc_score,"The image appears to contain mostly text or document content",{"gate":"local_document_fallback","document_score":doc_score}
-        return strong_local,local_score,("Plant-like foliage detected" if strong_local else "The photo does not contain enough reliable plant evidence"),{"gate":"local_strict_fallback","document_score":doc_score}
+        if doc_score>=.65 or not strong_local:
+            return False,doc_score,"The image could not be verified as a plant with enough confidence",{"gate":"strict_local_fallback","document_score":doc_score}
+        return True,local_score,"Strong plant-like foliage detected",{"gate":"strict_local_fallback","document_score":doc_score}
 
 
 # -----------------------------------------------------------------------------
@@ -678,6 +762,38 @@ def care_assessment(img: Image.Image, p: dict, health: dict) -> dict:
     }
 
 
+
+def plantcare_score(plant: dict, health: dict | None, care: dict | None) -> tuple[int, str]:
+    """Conservative 0–100 care-readiness score based only on visible/photo evidence and profile guidance."""
+    score = 70
+    if health:
+        level = str(health.get("level","")).lower()
+        if "good" in level or "healthy" in level:
+            score += 12
+        elif "watch" in level or "stress" in level:
+            score -= 10
+        elif "concern" in level or "poor" in level:
+            score -= 18
+        score -= min(15, int(float(health.get("yellow",0))*30))
+        score -= min(15, int(float(health.get("brown",0))*35))
+    if care:
+        for key in ("water_status","fertilizer_status","sunlight_status","growth_status"):
+            value = str(care.get(key,"")).lower()
+            if any(x in value for x in ("good","appropriate","on track","okay","adequate")):
+                score += 2
+            elif any(x in value for x in ("watch","check","attention")):
+                score -= 2
+    score = max(0, min(100, score))
+    if score >= 85:
+        band = "Excellent care readiness"
+    elif score >= 70:
+        band = "Good care readiness"
+    elif score >= 50:
+        band = "Needs attention"
+    else:
+        band = "Needs a closer check"
+    return score, band
+
 def confidence_label(rows: List[Tuple[dict,float]]) -> Tuple[str,int]:
     if not rows:
         return "Needs confirmation", 0
@@ -708,8 +824,11 @@ with st.sidebar:
             st.session_state.page=name
             st.session_state.analysis=None
             st.rerun()
+    st.markdown('<div class="pc-page-byline" style="justify-content:flex-start;margin:0 0 12px">🌿 Made by <strong>Aradhy Mundhe</strong></div>',unsafe_allow_html=True)
     st.markdown("<br>",unsafe_allow_html=True)
     st.markdown(f'<div class="pc-card" style="padding:16px"><div style="font-size:.72rem;color:#64766b;font-weight:800">PLANT LIBRARY</div><div style="font-size:1.45rem;font-weight:900;color:#0b6b39">{len(PLANTS)} plants</div><div style="font-size:.76rem;color:#64766b;margin-top:5px">Offline-safe • No API key</div></div>',unsafe_allow_html=True)
+
+st.markdown('<div class="pc-page-byline">🌿 Made by <strong>Aradhy Mundhe</strong></div>',unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # Plant reference images
@@ -924,12 +1043,23 @@ if page=="Home":
     for c,(v,l) in zip(cols,[(len(PLANTS),"Plants in library"),("📷","Photo identification"),("🌱","Plant care"),("⏰","Care reminders")]):
         with c: st.markdown(f'<div class="pc-stat"><div class="pc-stat-num">{v}</div><div class="pc-stat-label">{l}</div></div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-title">Explore PlantCare AI</div>',unsafe_allow_html=True)
+    hs1,hs2,hs3,hs4=st.columns(4)
+    for col,num,label in [(hs1,str(len(PLANTS)),"Plant profiles"),(hs2,"2-stage","Plant safety gate"),(hs3,"No API","Paid key required"),(hs4,"100%", "Free public app")]:
+        with col: st.markdown(f'<div class="pc-mini"><b>{num}</b><span>{label}</span></div>',unsafe_allow_html=True)
     a,b,c=st.columns(3)
     for col,title,desc in [(a,"📷 Identify a Plant","Take a photo with the camera or upload one from your gallery to find a possible plant match."),(b,"📚 Learn & Explore","Browse plant photos, identification features, growing conditions, care, pests and safety information."),(c,"❤️ My Plants","Save plants and set reminders for watering, fertilizer, pesticide, weedicide and other care tasks.")]:
         with col: st.markdown(f'<div class="pc-card"><h3>{title}</h3><p>{desc}</p></div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-title">Smart care tools</div>',unsafe_allow_html=True)
     x1,x2,x3=st.columns(3)
     for col,title,desc in [(x1,"🧠 Smart rejection","Screens text-heavy and obvious non-plant images before accepting a species match."),(x2,"🩺 Visual health check","Highlights visible yellowing, browning and other stress patterns without pretending to diagnose disease."),(x3,"📊 Care readiness","Combines watering, light, soil, fertilizer, pests and growth guidance into one plant-care view.")]:
+        with col: st.markdown(f'<div class="pc-card"><h3>{title}</h3><p>{desc}</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-title">PlantCare AI toolkit</div>',unsafe_allow_html=True)
+    t1,t2,t3=st.columns(3)
+    for col,title,desc in [
+        (t1,"🛡️ Smart Rejection","Separates everyday objects and text-heavy images from plant photos before species matching."),
+        (t2,"🌿 PlantCare Score","Summarizes visible plant condition and care-readiness signals without pretending to measure what a photo cannot measure."),
+        (t3,"📋 Care-ready profiles","Combines water, light, soil, fertilizer, pests, diseases, growth and safety guidance in one place.")
+    ]:
         with col: st.markdown(f'<div class="pc-card"><h3>{title}</h3><p>{desc}</p></div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-title">How it works</div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-info"><b>1.</b> Choose a photo &nbsp; → &nbsp; <b>2.</b> Analyze the image &nbsp; → &nbsp; <b>3.</b> Review the possible plant match &nbsp; → &nbsp; <b>4.</b> Explore its care profile or save it to My Plants.</div>',unsafe_allow_html=True)
@@ -938,7 +1068,7 @@ if page=="Home":
 # Identify
 # -----------------------------------------------------------------------------
 elif page=="Identify a Plant":
-    st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">📷 Identify a Plant</h1><p>Take a photo or choose one from your gallery. Then press the green Analyze Image button. The analysis never depends on a paid API key.</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">📷 Identify a Plant</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Take a photo or choose one from your gallery. PlantCare AI first checks whether the image actually contains a plant, then performs species matching. It will refuse a guess when the evidence is weak.</p><div class="pc-pills"><span class="pc-pill">🛡️ Non-plant gate</span><span class="pc-pill">🧠 Multi-view vision</span><span class="pc-pill">🌿 56-plant library</span><span class="pc-pill">⚠️ No forced guess</span></div></div>',unsafe_allow_html=True)
 
     if "selected_image_bytes" not in st.session_state:
         st.session_state.selected_image_bytes = None
@@ -981,7 +1111,7 @@ elif page=="Identify a Plant":
                 with c4: growth=st.selectbox("Growth habit",["Not sure","Upright","Trailing/vining","Clumping","Tree/shrub","Rosette"],key="growth_v5")
                 with c5: thorns=st.selectbox("Thorns / spines",["Not sure","Present","Not visible"],key="thorns_v5")
 
-            st.markdown('<div class="pc-analyze-box"><div><b>Ready to identify this photo?</b><br><span>The app compares the photo with the plant library using BioCLIP first, then rejects it only when there is strong evidence that it is a non-plant object. If BioCLIP is unavailable, the app uses a local fallback. The filename is never used to choose the plant.</span></div></div>',unsafe_allow_html=True)
+            st.markdown('<div class="pc-analyze-box"><div><b>Ready to identify this photo?</b><br><span>The app first screens the image for obvious non-plant objects, then checks plant presence and performs BioCLIP species matching. It does not intentionally force every image into the 56-plant library; when reliable evidence is missing, it asks you to try again. The filename is never used to choose the plant.</span></div></div>',unsafe_allow_html=True)
             analyze=st.button("🔎  ANALYZE IMAGE",type="primary",width="stretch",key="analyze_v10")
             cclear,_=st.columns([1,4])
             with cclear:
@@ -1000,26 +1130,35 @@ elif page=="Identify a Plant":
                 else:
                     with st.spinner("Analyzing plant photo… first run may take longer while the vision model loads."):
                         clues=clue_tokens(leaf_shape,leaf_texture,flowers,growth,thorns)
-                        # IMPORTANT: identify first, then use the plant/object model only
-                        # as a strong rejection check. The previous V12 version ran a
-                        # conservative gate first; that gate could reject genuine plants
-                        # (especially flowers, mango/tulsi and warm-lit photos) before
-                        # BioCLIP ever got a chance to identify them.
-                        ai_rows, model_used, model_error = optional_vision_rank(image, st.session_state.get("selected_image_name", ""))
-                        if model_used and ai_rows:
+                        # HARD STAGE 1: independent general-object screening happens
+                        # BEFORE BioCLIP. This prevents a car, person, laptop, etc. from
+                        # ever reaching the 56-class plant species matcher.
+                        reject_object=False
+                        object_reason=""
+                        general_meta={}
+                        try:
+                            reject_general,general_reason,general_meta=general_object_screen(raw)
+                            if reject_general:
+                                reject_object=True
+                                object_reason=general_reason
+                        except Exception:
+                            pass
+                        if reject_object:
+                            st.session_state.analysis={"nonplant":True,"reason":object_reason,"score":0.0}
+                        else:
+                            ai_rows, model_used, model_error = optional_vision_rank(image, st.session_state.get("selected_image_name", ""))
+                        if not reject_object and model_used and ai_rows:
                             rows=ai_rows
-                            # Keep the non-plant protection, but reject only when the
-                            # object evidence is decisively stronger than plant evidence.
-                            # BioCLIP scores are similarities, not calibrated probabilities.
-                            reject_object=False
-                            object_reason=""
-                            try:
-                                _, _, obj_plant_score, obj_margin, obj_meta = _strong_object_screen(image)
-                                if obj_meta.get("object_score",0.0) >= 32.0 and obj_margin <= -6.0:
-                                    reject_object=True
-                                    object_reason="The photo is much more consistent with a non-plant object than with plant imagery."
-                            except Exception:
-                                pass
+                            # Secondary BioCLIP/context checks catch text-heavy images
+                            # and cases where the general model is uncertain.
+                            if not reject_object:
+                                try:
+                                    _, _, obj_plant_score, obj_margin, obj_meta = _strong_object_screen(image)
+                                    if obj_meta.get("object_score",0.0) >= 32.0 and obj_margin <= -6.0:
+                                        reject_object=True
+                                        object_reason="The photo is much more consistent with a non-plant object than with plant imagery."
+                                except Exception:
+                                    pass
                             try:
                                 ctx_plant,ctx_text,ctx_margin,doc_score=bioclip_context_screen(image)
                                 if (ctx_text>=31.0 and ctx_margin<=-2.0) or (doc_score>=.72 and ctx_margin<3.0):
@@ -1106,6 +1245,8 @@ elif page=="Identify a Plant":
             st.markdown(f'<div class="pc-warning"><b>Important:</b> {health_issue_text(top,health)}<br><small>This is a visual screening only, not a definitive disease diagnosis. A clear close-up of affected leaves is needed for more reliable assessment.</small></div>',unsafe_allow_html=True)
         st.markdown("### 🩺 PlantCare check")
         care=result.get("care") or care_assessment(image, top, health or visual_health_screen(image))
+        pcs, pcb = plantcare_score(top, health, care)
+        st.markdown(f'<div class="pc-score"><div class="pc-score-ring">{pcs}</div><div class="pc-score-copy"><div class="pc-score-title">🌿 PlantCare Score</div><div class="pc-score-sub"><b>{pcb}</b> · A conservative photo-based care-readiness indicator, not a medical or horticultural diagnosis.</div></div></div>', unsafe_allow_html=True)
         care_cards=[
             ("💧 Water / hydration", care["water_status"], care["water_detail"]),
             ("🌿 Fertilizer", care["fertilizer_status"], care["fertilizer_detail"]),
@@ -1141,7 +1282,7 @@ elif page=="Identify a Plant":
 
 
 elif page=="Plant Library":
-    st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">🌿 Plant Library</h1><p>Explore real reference photographs, botanical names, growing conditions and practical care profiles across the complete collection.</p><div class="pc-pills"><span class="pc-pill">📸 Reference photos</span><span class="pc-pill">🌱 56 plant profiles</span><span class="pc-pill">☀️ Growing conditions</span><span class="pc-pill">🐛 Pests & diseases</span></div></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">🌿 Plant Library</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Explore real reference photographs, botanical names, growing conditions and practical care profiles across the complete collection.</p><div class="pc-pills"><span class="pc-pill">📸 Reference photos</span><span class="pc-pill">🌱 56 plant profiles</span><span class="pc-pill">☀️ Growing conditions</span><span class="pc-pill">🐛 Pests & diseases</span></div></div>',unsafe_allow_html=True)
     query=st.text_input("Search the plant library",placeholder="Search by common name, scientific name or category…",key="library_search_v7")
     f1,f2=st.columns(2)
     categories=sorted({str(p.get("category","Other")) for p in PLANTS})
@@ -1195,7 +1336,7 @@ elif page=="Search":
                     st.session_state.selected_plant=p["common_name"]; st.rerun()
 
 elif page=="My Plants":
-    st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">❤️ My Plants</h1><p>Add your plants directly and create reminders for watering, fertilizer, sunlight, pest checks and other care tasks.</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">❤️ My Plants</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Add your plants directly and create reminders for watering, fertilizer, sunlight, pest checks and other care tasks.</p></div>',unsafe_allow_html=True)
     now=datetime.now()
     st.markdown("### ➕ Add a plant to My Plants")
     add_col1,add_col2=st.columns([2,1])
@@ -1256,7 +1397,7 @@ elif page=="My Plants":
 
 elif page=="About":
     st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">ℹ️ About PlantCare AI</h1><p>A student project focused on plant identification, plant education and practical care information.</p></div>',unsafe_allow_html=True)
-    st.markdown('<div class="pc-card"><h3>PlantCare AI — Made by Aradhy Mundhe</h3><p>This project was created by <b>Aradhy Mundhe</b> as a student project for plant identification, plant education and practical plant care.</p></div><div class="pc-card"><h3>What changed in this updated version?</h3><p>• Added Multi-view BioCLIP species matching with camera/gallery normalization and conservative object rejection.<br>• Kept the offline-safe local visual screening so a model-loading problem does not crash the app.<br>• Reworked the sidebar into clear, large navigation buttons.<br>• Converted the interface to a consistent white-and-green theme.<br>• Added multi-view camera/gallery analysis, visual health screening, care requirements and clearer uncertainty messages.<br>• No OpenAI key, Gemini key or paid API is required.</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-card"><h3>PlantCare AI — Made by Aradhy Mundhe</h3><p>This project was created by <b>Aradhy Mundhe</b> as a student project for plant identification, plant education and practical plant care.</p></div><div class="pc-card"><h3>What changed in this updated version?</h3><p>• Added a two-stage safety gate: general-object screening before plant species matching, followed by biological vision checks.<br>• Kept the offline-safe local visual screening so a model-loading problem does not crash the app.<br>• Reworked the sidebar into clear, large navigation buttons.<br>• Converted the interface to a consistent white-and-green theme.<br>• Added multi-view camera/gallery analysis, visual health screening, care requirements and clearer uncertainty messages.<br>• No OpenAI key, Gemini key or paid API is required.</p></div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-title">Sharing</div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-info"><b>For your teacher:</b> the easiest experience is a public hosted URL. A <code>localhost</code> address only works on the computer running PlantCare AI. The included launcher is for local use; online sharing requires deployment to a web host.</div>',unsafe_allow_html=True)
 
