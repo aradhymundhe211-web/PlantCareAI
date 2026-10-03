@@ -114,7 +114,11 @@ if "reminders" not in st.session_state:
 # -----------------------------------------------------------------------------
 @st.cache_resource(show_spinner=False)
 def load_bioclip():
-    """Load BioCLIP lazily. The model is never downloaded just to open the app."""
+    """Load one shared BioCLIP model for the whole Streamlit process.
+
+    Community Cloud has limited memory, so every identification component must
+    reuse the same model instead of constructing separate model copies.
+    """
     import torch
     import open_clip
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -375,20 +379,16 @@ def bioclip_rank(img: Image.Image, filename_hint: str = ""):
         probs=torch.softmax(mean_logits,dim=0).cpu().numpy()
 
     order=np.argsort(-probs); candidate_idx=order[:8]
-    candidate_names=tuple(PLANTS[i]["common_name"] for i in candidate_idx)
-    ref_features=reference_features_for_candidates(candidate_names)
-    query_vec=mean_feat.cpu().numpy()[0]
     rows=[]
     for i in candidate_idx:
-        p=PLANTS[i]; text_score=float(probs[i])
-        ref_vec=ref_features.get(p["common_name"])
-        ref_score=float(np.dot(query_vec,ref_vec)) if ref_vec is not None else None
-        ref_norm=((ref_score+1.0)/2.0) if ref_score is not None else text_score
-        # Text evidence remains primary; reference-image evidence breaks close ties.
-        combined=.72*text_score+.28*ref_norm
-        rows.append((p,combined,text_score,ref_score))
+        p=PLANTS[i]
+        text_score=float(probs[i])
+        # Keep the species matcher deterministic and memory-friendly on Cloud:
+        # reference images remain available in the UI, but are not downloaded and
+        # encoded during every identification request.
+        rows.append((p,text_score))
     rows.sort(key=lambda x:x[1],reverse=True)
-    return [(p,float(score)) for p,score,_,_ in rows]
+    return [(p,float(score)) for p,score in rows]
 
 
 def optional_vision_rank(img: Image.Image, filename_hint: str = ""):
@@ -662,57 +662,124 @@ with st.sidebar:
 # Plant reference images
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=86400, show_spinner=False)
-def get_plant_photos(names: Tuple[str, ...]) -> Dict[str, str]:
-    """Resolve reference thumbnails and preserve Wikipedia redirects."""
+def _inat_exact_photo(scientific_name: str) -> str | None:
+    """Return a photo from an exact iNaturalist taxon match.
+
+    The lookup is based on the scientific name, not a free-text image search.
+    This prevents unrelated people/objects from becoming plant references.
+    """
+    name = str(scientific_name or "").strip()
+    if not name:
+        return None
+    try:
+        r = requests.get(
+            "https://api.inaturalist.org/v1/taxa",
+            params={"q": name, "per_page": 10, "order_by": "relevance"},
+            headers={"User-Agent": "PlantCareAI/1.0 (student project)"},
+            timeout=10,
+        )
+        r.raise_for_status()
+        for taxon in r.json().get("results", []):
+            returned = str(taxon.get("name", "")).strip()
+            if returned.lower() != name.lower():
+                continue
+            photo = taxon.get("default_photo") or {}
+            url = photo.get("medium_url") or photo.get("square_url") or photo.get("original_url")
+            if url:
+                return str(url)
+    except Exception:
+        return None
+    return None
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _wiki_exact_photo(title: str) -> str | None:
+    """Return a thumbnail only from an exact Wikipedia article.
+
+    This is a last-resort fallback after exact botanical-taxon lookup. Broad
+    Wikipedia search is deliberately never used. Disambiguation pages are
+    rejected so unrelated search results cannot become reference photos.
+    """
+    title = str(title or "").strip()
+    if not title:
+        return None
+    try:
+        r = requests.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={
+                "action": "query", "format": "json", "redirects": 1,
+                "prop": "pageimages|pageprops", "piprop": "thumbnail",
+                "pithumbsize": 700, "ppprop": "disambiguation", "titles": title,
+            },
+            headers={"User-Agent": "PlantCareAI/1.0 (student project)"},
+            timeout=10,
+        )
+        r.raise_for_status()
+        pages = r.json().get("query", {}).get("pages", {})
+        for page in pages.values():
+            if page.get("missing") is not None:
+                continue
+            if "disambiguation" in page.get("pageprops", {}):
+                continue
+            thumb = page.get("thumbnail", {}).get("source")
+            if thumb:
+                return str(thumb)
+    except Exception:
+        return None
+    return None
+
+# Verified Wikimedia Commons plant photos used as a deterministic final fallback
+# for the two records that previously had incorrect/unavailable references.
+_VERIFIED_PLANT_PHOTOS = {
+    "rose": "https://commons.wikimedia.org/wiki/Special:Redirect/file/Rose_rosa.jpg",
+    "rosa": "https://commons.wikimedia.org/wiki/Special:Redirect/file/Rose_rosa.jpg",
+    "tradescantia zebrina": "https://commons.wikimedia.org/wiki/Special:Redirect/file/Tradescantia_zebrina.png",
+}
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def get_plant_photos_for_records(records: Tuple[Tuple[str, str], ...]) -> Dict[str, str]:
+    """Resolve each library record to a real plant photo.
+
+    Priority:
+      1. Deterministic verified fallback for known problem records.
+      2. Exact scientific-name iNaturalist taxon photo.
+      3. Exact Wikipedia article thumbnail as a final fallback.
+    No free-text image search is used anywhere in the library.
+    """
     result: Dict[str, str] = {}
-    names = tuple(dict.fromkeys(str(n).strip() for n in names if str(n).strip()))
-    if not names:
-        return result
-    session = requests.Session()
-    session.headers.update({"User-Agent": "PlantCareAI/1.0 (student project)"})
-    for start_i in range(0, len(names), 20):
-        batch = list(names[start_i:start_i+20])
-        try:
-            r=session.get("https://en.wikipedia.org/w/api.php", params={
-                "action":"query","format":"json","redirects":1,
-                "prop":"pageimages","piprop":"thumbnail","pithumbsize":700,
-                "titles":"|".join(batch)}, timeout=10)
-            r.raise_for_status(); data=r.json().get("query", {})
-            pages=data.get("pages", {})
-            redirects={str(x.get("from","")).strip().lower():str(x.get("to","")).strip().lower() for x in data.get("redirects", []) if x.get("from") and x.get("to")}
-            by_title={}
-            for page in pages.values():
-                title=str(page.get("title","")).strip().lower(); thumb=page.get("thumbnail",{}).get("source")
-                if title and thumb: by_title[title]=thumb; result[title]=thumb
-            for original,target in redirects.items():
-                if target in by_title: result[original]=by_title[target]
-        except Exception:
-            pass
-    missing=[n for n in names if n.lower() not in result]
-    for n in missing:
-        try:
-            sr=session.get("https://en.wikipedia.org/w/api.php", params={"action":"query","format":"json","list":"search","srsearch":n,"srnamespace":0,"srlimit":3}, timeout=8)
-            sr.raise_for_status()
-            for hit in sr.json().get("query",{}).get("search",[]):
-                title=hit.get("title")
-                if not title: continue
-                pr=session.get("https://en.wikipedia.org/w/api.php", params={"action":"query","format":"json","redirects":1,"prop":"pageimages","piprop":"thumbnail","pithumbsize":700,"titles":title}, timeout=8)
-                pr.raise_for_status(); data=pr.json().get("query",{})
-                redirects={str(x.get("from","")).strip().lower():str(x.get("to","")).strip().lower() for x in data.get("redirects",[]) if x.get("from") and x.get("to")}
-                for page in data.get("pages",{}).values():
-                    thumb=page.get("thumbnail",{}).get("source"); actual=str(page.get("title","")).strip().lower()
-                    if thumb:
-                        result[n.lower()]=thumb
-                        if actual: result[actual]=thumb
-                        for original,target in redirects.items():
-                            if target==actual: result[original]=thumb
-                        break
-                if n.lower() in result: break
-        except Exception:
-            continue
+    for common, scientific in records:
+        common = str(common or '').strip()
+        scientific = str(scientific or '').strip()
+        url = (_VERIFIED_PLANT_PHOTOS.get(common.lower()) or
+               _VERIFIED_PLANT_PHOTOS.get(scientific.lower()))
+        if not url and scientific:
+            url = _inat_exact_photo(scientific)
+        if not url and scientific:
+            url = _wiki_exact_photo(scientific)
+        if not url and common:
+            # Common-name lookup is still exact, never a search result list.
+            url = _wiki_exact_photo(common)
+        if url:
+            if common:
+                result[common.lower()] = url
+            if scientific:
+                result[scientific.lower()] = url
     return result
 
 @st.cache_data(ttl=86400, show_spinner=False)
+def get_plant_photos(names: Tuple[str, ...]) -> Dict[str, str]:
+    """Backward-compatible photo resolver for profile pages."""
+    names = tuple(str(n).strip() for n in names if str(n).strip())
+    result: Dict[str, str] = {}
+    for n in names:
+        key = n.lower()
+        if key in _VERIFIED_PLANT_PHOTOS:
+            result[key] = _VERIFIED_PLANT_PHOTOS[key]
+            continue
+        url = _inat_exact_photo(n) or _wiki_exact_photo(n)
+        if url:
+            result[key] = url
+    return result
+
 def fetch_reference_image(url: str) -> bytes | None:
     """Fetch and validate the image server-side so browser hotlink failures do not break cards."""
     if not url: return None
@@ -956,7 +1023,7 @@ elif page=="Identify a Plant":
             st.markdown('<div class="pc-warning"><b>Confirm before relying on the name:</b> visually similar plants can look alike. Use the alternatives and the reference photo below.</div>',unsafe_allow_html=True)
         st.markdown("### 🌿 Other possible matches")
         alt=result["rows"][1:4]
-        alt_map=get_plant_photos(tuple([x[0]["scientific_name"] for x in alt] + [x[0]["common_name"] for x in alt])) if alt else {}
+        alt_map=get_plant_photos_for_records(tuple((x[0]['common_name'], x[0]['scientific_name']) for x in alt)) if alt else {}
         for p,s in alt:
             col1,col2=st.columns([1,2])
             with col1:
@@ -1014,7 +1081,7 @@ elif page=="Plant Library":
     query=st.text_input("Search the plant library",placeholder="Type mango, tulsi, rose…",key="library_search_v7")
     q=query.strip().lower()
     items=[p for p in PLANTS if not q or q in (p["common_name"]+" "+p["scientific_name"]+" "+p["category"]).lower()]
-    photo_map=get_plant_photos(tuple([x["scientific_name"] for x in items]+[x["common_name"] for x in items])) if items else {}
+    photo_map=get_plant_photos_for_records(tuple((x['common_name'], x['scientific_name']) for x in items)) if items else {}
     cols=st.columns(3)
     for i,p in enumerate(items):
         with cols[i%3]:
