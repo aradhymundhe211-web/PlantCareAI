@@ -69,6 +69,7 @@ st.markdown(
     div[data-testid="stMetric"]{background:#fff;border:1px solid var(--line);border-radius:14px}
 
     .pc-upload-card{background:#fff;border:1px solid #cfe2d5;border-radius:16px;padding:14px 16px;margin-bottom:8px}.pc-upload-title{font-weight:900;color:#0b6b39}.pc-upload-sub{font-size:.82rem;color:#64766b;margin-top:3px}.pc-selected-label{background:#eaf8ef;color:#116335;border:1px solid #cde8d4;border-radius:12px;padding:9px 12px;font-weight:800;margin:12px 0}.pc-analyze-box{background:#f3fbf6;border:1px solid #cce5d3;border-radius:16px;padding:14px 16px;margin:12px 0}.pc-analyze-box span{color:#64766b;font-size:.84rem}.pc-photo-placeholder{height:230px;border-radius:18px;background:#eff9f2;border:1px dashed #b7d4bf;display:flex;align-items:center;justify-content:center;text-align:center;flex-direction:column;color:#0b6b39;font-size:1.15rem}.pc-photo-placeholder span{color:#64766b;font-size:.8rem;margin-top:4px}
+.pc-score{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#f0fbf4,#fff);border:1px solid #cce5d3;border-radius:18px;padding:15px 17px}.pc-score-ring{width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#138a4b;color:#fff;font-weight:950;font-size:1.05rem;box-shadow:0 8px 18px rgba(19,138,75,.18)}.pc-score-copy{flex:1}.pc-score-title{font-weight:900;color:#0b6b39}.pc-score-sub{font-size:.82rem;color:#64766b;margin-top:3px}.pc-library-count{font-size:.82rem;color:#64766b;font-weight:800;margin:8px 0 16px}.pc-featured{border-radius:22px;overflow:hidden;border:1px solid var(--line);background:#fff;box-shadow:0 10px 28px rgba(22,55,35,.05);padding-bottom:12px}.pc-featured-body{padding:6px 17px 10px}.pc-featured-body h3{margin:0;color:var(--ink)}.pc-featured-body p{margin:5px 0 0;color:var(--muted);font-size:.86rem}.pc-reject{background:linear-gradient(135deg,#fff5f5,#fff);border:1px solid #efcaca;border-radius:20px;padding:18px 20px}.pc-reject-title{font-size:1.15rem;font-weight:950;color:#8a2020}.pc-checklist{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.pc-check{background:#f5fbf7;border:1px solid #d5e9da;border-radius:999px;padding:6px 10px;font-size:.78rem;font-weight:800;color:#315f43}
     @media(max-width:900px){.pc-hero{padding:25px 22px}.pc-hero h1{font-size:2.2rem}}
     </style>
     """,
@@ -256,6 +257,55 @@ def bioclip_gate_text_features():
     return device, model, groups[0], groups[1]
 
 
+@st.cache_resource(show_spinner=False)
+def bioclip_context_text_features():
+    """Build plant-vs-document prompt embeddings for a second rejection layer."""
+    device, model, _, tokenizer = load_bioclip()
+    import torch
+    plant_prompts=[
+        "a clear photograph of a real living plant",
+        "a botanical photograph showing real leaves, stems or flowers",
+        "a close-up photograph of real plant foliage",
+    ]
+    text_prompts=[
+        "a photograph of a printed page full of text",
+        "a screenshot containing text and words",
+        "a document or textbook page",
+        "a photograph of a computer screen showing text",
+        "a scanned worksheet or paper",
+        "a poster or sign containing mostly text",
+    ]
+    groups=[]
+    with torch.no_grad():
+        for prompts in (plant_prompts,text_prompts):
+            f=model.encode_text(tokenizer(prompts).to(device)); f=f/f.norm(dim=-1,keepdim=True)
+            f=f.mean(dim=0,keepdim=True); f=f/f.norm(dim=-1,keepdim=True); groups.append(f)
+    return device, model, groups[0], groups[1]
+
+
+def _document_visual_score(img: Image.Image) -> float:
+    """Model-free supporting score for text-heavy documents/screenshots."""
+    im=ImageOps.exif_transpose(img).convert("RGB"); im.thumbnail((360,360))
+    a=np.asarray(im,dtype=np.float32)/255.0; gray=a.mean(axis=2)
+    mx=a.max(axis=2); d=mx-a.min(axis=2); sat=np.divide(d,mx,out=np.zeros_like(d),where=mx>1e-6)
+    edge=float(np.abs(np.diff(gray,axis=1)).mean()+np.abs(np.diff(gray,axis=0)).mean())
+    low_sat=float((sat<.10).mean()); mid=float(((gray>.18)&(gray<.92)).mean())
+    return float(max(0,min(1,min(edge*5,.45)+min(low_sat*.45,.35)+min(mid*.20,.20))))
+
+
+def bioclip_context_screen(img: Image.Image):
+    device, model, plant_text, text_text=bioclip_context_text_features()
+    preprocess=load_bioclip()[2]
+    import torch
+    ps=[]; ts=[]
+    with torch.no_grad():
+        for view in _analysis_views(img):
+            x=preprocess(view).unsqueeze(0).to(device); f=model.encode_image(x); f=f/f.norm(dim=-1,keepdim=True)
+            ps.append(float((100.0*f@plant_text.T).squeeze().cpu())); ts.append(float((100.0*f@text_text.T).squeeze().cpu()))
+    plant_score=float(np.mean(ps)); text_score=float(np.mean(ts))
+    return plant_score,text_score,plant_score-text_score,_document_visual_score(img)
+
+
 def bioclip_gate(img: Image.Image):
     """Use BioCLIP to screen plant vs obvious non-plant images across views."""
     device, model, plant_text, object_text = bioclip_gate_text_features()
@@ -421,29 +471,32 @@ def _strong_object_screen(img: Image.Image):
 
 
 def vision_gate(img: Image.Image):
-    """Conservative plant/object gate with a single shared BioCLIP model.
-
-    The local screen is deliberately only a fallback. If BioCLIP is available,
-    its plant-vs-object margin is the primary decision signal.
-    """
-    local_is_plant, local_score, local_reason, local_features=plant_gate(img)
+    """Multi-signal plant-presence gate for model-unavailable fallback."""
+    local_is_plant,local_score,local_reason,local_features=plant_gate(img)
+    sharp,bright,mindim=image_quality(img)
+    if mindim<140 or bright<8 or bright>253 or sharp<3:
+        return False,0.0,"The photo quality is too low for reliable plant detection",{"gate":"quality"}
     try:
-        clip_is_plant, plant_score, margin, meta=bioclip_gate(img)
-        object_score=float(meta["object_score"])
-        if object_score >= 32.0 and margin <= -6.0:
-            return False, max(0.0,min(1.0,object_score/100.0)), "The photo appears to show an object rather than a plant", {"gate":"bioclip_object","margin":margin}
-        if clip_is_plant or margin > -6.0:
-            gate_score=max(0.0,min(1.0,0.5+margin/20.0))
-            return True, gate_score, "Image passed the plant screening step", {"gate":"bioclip_ensemble","margin":margin}
-        # For borderline BioCLIP results, require strong local foliage evidence.
+        clip_is_plant,plant_score,margin,meta=bioclip_gate(img); object_score=float(meta["object_score"])
+        try:
+            cps,cts,ctx_margin,doc_score=bioclip_context_screen(img)
+        except Exception:
+            cps,cts,ctx_margin,doc_score=plant_score,0.0,plant_score,_document_visual_score(img)
+        if (cts>=31.0 and ctx_margin<=-2.0) or (doc_score>=.72 and ctx_margin<3.0):
+            return False,doc_score,"The image appears to contain mostly text or document content",{"gate":"document_screen","document_score":doc_score}
+        if object_score>=32.0 and margin<=-6.0:
+            return False,max(0,min(1,object_score/100)),"The photo appears to show an object rather than a plant",{"gate":"bioclip_object","margin":margin}
+        if clip_is_plant and margin>=1.5:
+            return True,max(0,min(1,.5+margin/20)),"Plant-like imagery detected",{"gate":"bioclip_ensemble","margin":margin}
         if local_is_plant and local_features.get("leafy_green_ratio",0)>=.10 and local_features.get("edge",0)>=.10:
             return True,local_score,"Plant-like foliage detected",{"gate":"strong_local_foliage","margin":margin}
-        return False,max(0.0,min(1.0,0.5+margin/20.0)),"The photo does not contain enough reliable plant evidence",{"gate":"conservative_reject","margin":margin}
+        return False,max(0,min(1,.5+margin/20)),"The image does not contain enough reliable plant evidence",{"gate":"conservative_reject","margin":margin}
     except Exception:
-        # If the model cannot load, use a strict local fallback rather than
-        # returning a random plant class.
-        strong_local=(local_features.get("leafy_green_ratio",0)>=.12 and local_features.get("edge",0)>=.09) or (local_features.get("green_ratio",0)>=.18 and local_features.get("edge",0)>=.11)
-        return strong_local,local_score,("Plant-like foliage detected" if strong_local else "The photo does not contain enough reliable plant evidence"),{"gate":"local_strict_fallback"}
+        doc_score=_document_visual_score(img)
+        strong_local=((local_features.get("leafy_green_ratio",0)>=.12 and local_features.get("edge",0)>=.09) or (local_features.get("green_ratio",0)>=.18 and local_features.get("edge",0)>=.11))
+        if doc_score>=.70 and not strong_local:
+            return False,doc_score,"The image appears to contain mostly text or document content",{"gate":"local_document_fallback","document_score":doc_score}
+        return strong_local,local_score,("Plant-like foliage detected" if strong_local else "The photo does not contain enough reliable plant evidence"),{"gate":"local_strict_fallback","document_score":doc_score}
 
 
 # -----------------------------------------------------------------------------
@@ -651,7 +704,7 @@ with st.sidebar:
     st.markdown('<div class="pc-brand"><div class="pc-logo">🌿</div><div><div class="pc-brand-title">PlantCare AI</div><div class="pc-brand-sub">Identify • Learn • Care</div></div></div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-nav-title">Menu</div>',unsafe_allow_html=True)
     for icon,name in NAV:
-        if st.button(f"{icon}  {name}",key=f"nav_{name}",use_container_width=True,type="primary" if st.session_state.page==name else "secondary"):
+        if st.button(f"{icon}  {name}",key=f"nav_{name}",width="stretch",type="primary" if st.session_state.page==name else "secondary"):
             st.session_state.page=name
             st.session_state.analysis=None
             st.rerun()
@@ -824,9 +877,9 @@ def get_plant_photo_bytes(p: dict, photo_map: Dict[str,str] | None=None) -> byte
 def plant_photo(p: dict, width: int=700, photo_map: Dict[str,str] | None=None):
     data=get_plant_photo_bytes(p,photo_map)
     if data:
-        st.image(data,use_container_width=True,caption=f"Reference photo • {p['common_name']}")
+        st.image(data,width="stretch",caption=f"Reference photo • {p['common_name']}")
     else:
-        st.image(botanical_fallback(p),use_container_width=True,caption=f"Plant reference • {p['common_name']}")
+        st.image(botanical_fallback(p),width="stretch",caption=f"Plant reference • {p['common_name']}")
         st.caption("Reference photo is temporarily unavailable; this offline botanical reference keeps the library usable.")
 
 
@@ -874,6 +927,10 @@ if page=="Home":
     a,b,c=st.columns(3)
     for col,title,desc in [(a,"📷 Identify a Plant","Take a photo with the camera or upload one from your gallery to find a possible plant match."),(b,"📚 Learn & Explore","Browse plant photos, identification features, growing conditions, care, pests and safety information."),(c,"❤️ My Plants","Save plants and set reminders for watering, fertilizer, pesticide, weedicide and other care tasks.")]:
         with col: st.markdown(f'<div class="pc-card"><h3>{title}</h3><p>{desc}</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-title">Smart care tools</div>',unsafe_allow_html=True)
+    x1,x2,x3=st.columns(3)
+    for col,title,desc in [(x1,"🧠 Smart rejection","Screens text-heavy and obvious non-plant images before accepting a species match."),(x2,"🩺 Visual health check","Highlights visible yellowing, browning and other stress patterns without pretending to diagnose disease."),(x3,"📊 Care readiness","Combines watering, light, soil, fertilizer, pests and growth guidance into one plant-care view.")]:
+        with col: st.markdown(f'<div class="pc-card"><h3>{title}</h3><p>{desc}</p></div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-title">How it works</div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-info"><b>1.</b> Choose a photo &nbsp; → &nbsp; <b>2.</b> Analyze the image &nbsp; → &nbsp; <b>3.</b> Review the possible plant match &nbsp; → &nbsp; <b>4.</b> Explore its care profile or save it to My Plants.</div>',unsafe_allow_html=True)
 
@@ -913,7 +970,7 @@ elif page=="Identify a Plant":
         try:
             image=ImageOps.exif_transpose(Image.open(__import__("io").BytesIO(raw))).convert("RGB")
             st.markdown(f'<div class="pc-selected-label">✓ {st.session_state.selected_image_source} photo selected</div>',unsafe_allow_html=True)
-            st.image(image,caption="Selected image",use_container_width=True)
+            st.image(image,caption="Selected image",width="stretch")
 
             with st.expander("Optional plant clues — improves matching when you know them", expanded=False):
                 c1,c2,c3=st.columns(3)
@@ -925,10 +982,10 @@ elif page=="Identify a Plant":
                 with c5: thorns=st.selectbox("Thorns / spines",["Not sure","Present","Not visible"],key="thorns_v5")
 
             st.markdown('<div class="pc-analyze-box"><div><b>Ready to identify this photo?</b><br><span>The app compares the photo with the plant library using BioCLIP first, then rejects it only when there is strong evidence that it is a non-plant object. If BioCLIP is unavailable, the app uses a local fallback. The filename is never used to choose the plant.</span></div></div>',unsafe_allow_html=True)
-            analyze=st.button("🔎  ANALYZE IMAGE",type="primary",use_container_width=True,key="analyze_v10")
+            analyze=st.button("🔎  ANALYZE IMAGE",type="primary",width="stretch",key="analyze_v10")
             cclear,_=st.columns([1,4])
             with cclear:
-                if st.button("Clear photo",use_container_width=True,key="clear_v5"):
+                if st.button("Clear photo",width="stretch",key="clear_v5"):
                     st.session_state.selected_image_bytes=None
                     st.session_state.selected_image_source=None
                     st.session_state.selected_image_name=""
@@ -962,8 +1019,13 @@ elif page=="Identify a Plant":
                                     reject_object=True
                                     object_reason="The photo is much more consistent with a non-plant object than with plant imagery."
                             except Exception:
-                                # Never turn a model-screening failure into a false
-                                # NO PLANT result. The species model already succeeded.
+                                pass
+                            try:
+                                ctx_plant,ctx_text,ctx_margin,doc_score=bioclip_context_screen(image)
+                                if (ctx_text>=31.0 and ctx_margin<=-2.0) or (doc_score>=.72 and ctx_margin<3.0):
+                                    reject_object=True
+                                    object_reason="The image appears to contain mostly text or document content, not a plant."
+                            except Exception:
                                 pass
 
                             if reject_object:
@@ -1021,6 +1083,8 @@ elif page=="Identify a Plant":
         st.markdown(f'<div class="pc-result"><div style="font-size:.78rem;font-weight:900;color:#64766b;text-transform:uppercase;letter-spacing:.08em">TOP PLANT MATCH</div><div class="pc-result-name">🌿 {top["common_name"]}</div><div class="pc-scientific"><b>Common name:</b> {top["common_name"]} &nbsp; · &nbsp; <i>{top["scientific_name"]}</i> · {top["family"]}</div><div class="pc-badge">{result["label"]} · {result["conf"]}% visual-match score</div></div>',unsafe_allow_html=True)
         if result["label"] in ["Possible match","Needs confirmation"]:
             st.markdown('<div class="pc-warning"><b>Confirm before relying on the name:</b> visually similar plants can look alike. Use the alternatives and the reference photo below.</div>',unsafe_allow_html=True)
+        score_value=int(result.get("conf",50))
+        st.markdown(f'<div class="pc-score"><div class="pc-score-ring">{score_value}</div><div class="pc-score-copy"><div class="pc-score-title">Identification confidence band</div><div class="pc-score-sub">This is a visual-match band, not a calibrated probability. Compare the plant profile and alternatives when the band is not strong.</div></div></div>',unsafe_allow_html=True)
         st.markdown("### 🌿 Other possible matches")
         alt=result["rows"][1:4]
         alt_map=get_plant_photos_for_records(tuple((x[0]['common_name'], x[0]['scientific_name']) for x in alt)) if alt else {}
@@ -1077,18 +1141,28 @@ elif page=="Identify a Plant":
 
 
 elif page=="Plant Library":
-    st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">🌿 Plant Library</h1><p>Browse all plants with reference images and complete care profiles.</p></div>',unsafe_allow_html=True)
-    query=st.text_input("Search the plant library",placeholder="Type mango, tulsi, rose…",key="library_search_v7")
+    st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">🌿 Plant Library</h1><p>Explore real reference photographs, botanical names, growing conditions and practical care profiles across the complete collection.</p><div class="pc-pills"><span class="pc-pill">📸 Reference photos</span><span class="pc-pill">🌱 56 plant profiles</span><span class="pc-pill">☀️ Growing conditions</span><span class="pc-pill">🐛 Pests & diseases</span></div></div>',unsafe_allow_html=True)
+    query=st.text_input("Search the plant library",placeholder="Search by common name, scientific name or category…",key="library_search_v7")
+    f1,f2=st.columns(2)
+    categories=sorted({str(p.get("category","Other")) for p in PLANTS})
+    with f1: category=st.selectbox("Filter by category",["All categories"]+categories,key="library_category_v1")
+    with f2: sort_mode=st.selectbox("Sort plants",["A–Z by common name","A–Z by scientific name"],key="library_sort_v1")
     q=query.strip().lower()
-    items=[p for p in PLANTS if not q or q in (p["common_name"]+" "+p["scientific_name"]+" "+p["category"]).lower()]
-    photo_map=get_plant_photos_for_records(tuple((x['common_name'], x['scientific_name']) for x in items)) if items else {}
-    cols=st.columns(3)
-    for i,p in enumerate(items):
-        with cols[i%3]:
-            plant_photo(p,photo_map=photo_map)
-            st.markdown(f'<div class="pc-card" style="margin-bottom:12px"><h3>🌿 {p["common_name"]}</h3><p><i>{p["scientific_name"]}</i><br>{p["category"]}</p></div>',unsafe_allow_html=True)
-            if st.button("Open profile",key="lib_"+p["common_name"],use_container_width=True):
-                st.session_state.selected_plant=p["common_name"]; st.session_state.search_q=""; st.session_state.page="Search"; st.rerun()
+    items=[p for p in PLANTS if (not q or q in (p["common_name"]+" "+p["scientific_name"]+" "+p["category"]).lower()) and (category=="All categories" or p.get("category")==category)]
+    items=sorted(items,key=lambda p:p["scientific_name" if sort_mode.endswith("scientific name") else "common_name"].lower())
+    st.markdown(f'<div class="pc-library-count">Showing {len(items)} of {len(PLANTS)} plants</div>',unsafe_allow_html=True)
+    if not items: st.info("No plants match those filters. Try a different name or category.")
+    else:
+        photo_map=get_plant_photos_for_records(tuple((x["common_name"],x["scientific_name"]) for x in items))
+        cols=st.columns(3)
+        for i,p in enumerate(items):
+            with cols[i%3]:
+                st.markdown('<div class="pc-featured">',unsafe_allow_html=True)
+                plant_photo(p,photo_map=photo_map)
+                st.markdown(f'<div class="pc-featured-body"><h3>🌿 {p["common_name"]}</h3><p><i>{p["scientific_name"]}</i><br>{p["category"]}</p></div>',unsafe_allow_html=True)
+                if st.button("Open full profile",key="lib_"+p["common_name"],width="stretch"):
+                    st.session_state.selected_plant=p["common_name"]; st.session_state.search_q=""; st.session_state.page="Search"; st.rerun()
+                st.markdown('</div>',unsafe_allow_html=True)
 
 elif page=="Search":
     st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">🔎 Search Plants</h1><p>Start typing and choose a suggested plant, or search by common name, scientific name or category.</p></div>',unsafe_allow_html=True)
@@ -1102,7 +1176,7 @@ elif page=="Search":
             scols=st.columns(2)
             for i,p in enumerate(suggestions):
                 with scols[i%2]:
-                    if st.button(f"🌿 {p['common_name']} · {p['scientific_name']}",key="suggest_"+p["common_name"],use_container_width=True):
+                    if st.button(f"🌿 {p['common_name']} · {p['scientific_name']}",key="suggest_"+p["common_name"],width="stretch"):
                         st.session_state.search_q=p["common_name"]; st.session_state.selected_plant=p["common_name"]; st.rerun()
         else:
             st.info("No plant suggestion yet. Try another spelling or search by scientific name.")
@@ -1117,7 +1191,7 @@ elif page=="Search":
         elif len(matches)>1:
             st.markdown("### Matching plants")
             for p in matches:
-                if st.button(f"🌿 {p['common_name']} — {p['scientific_name']}",key="match_"+p["common_name"],use_container_width=True):
+                if st.button(f"🌿 {p['common_name']} — {p['scientific_name']}",key="match_"+p["common_name"],width="stretch"):
                     st.session_state.selected_plant=p["common_name"]; st.rerun()
 
 elif page=="My Plants":
@@ -1129,7 +1203,7 @@ elif page=="My Plants":
         add_choice=st.selectbox("Choose a plant",[p["common_name"] for p in PLANTS],key="myplant_add_choice_v7")
     with add_col2:
         st.markdown("<div style='height:28px'></div>",unsafe_allow_html=True)
-        if st.button("➕ Add to My Plants",type="primary",use_container_width=True,key="add_myplant_direct_v7"):
+        if st.button("➕ Add to My Plants",type="primary",width="stretch",key="add_myplant_direct_v7"):
             if add_choice not in st.session_state.my_plants: st.session_state.my_plants.append(add_choice); st.success(f"{add_choice} added to My Plants.")
             else: st.info(f"{add_choice} is already in My Plants.")
             st.rerun()
@@ -1146,7 +1220,7 @@ elif page=="My Plants":
             st.markdown(f'<div class="pc-reminder"><div class="pc-reminder-title">{r["task"]} • {r["plant"]}</div><div class="pc-reminder-meta">{when.strftime("%d %b %Y, %I:%M %p")} • {r["repeat"]} • {status}</div></div>',unsafe_allow_html=True)
             b1,b2=st.columns(2)
             with b1:
-                if not r.get("done") and st.button("✓ Mark done",key="done_"+r["id"],use_container_width=True):
+                if not r.get("done") and st.button("✓ Mark done",key="done_"+r["id"],width="stretch"):
                     if r["repeat"]!="One-time":
                         delta={"Daily":timedelta(days=1),"Weekly":timedelta(days=7),"Every 30 days":timedelta(days=30)}[r["repeat"]]; nxt=when+delta
                         while nxt<=now: nxt+=delta
@@ -1154,7 +1228,7 @@ elif page=="My Plants":
                     else: r["done"]=True
                     st.rerun()
             with b2:
-                if st.button("Delete",key="del_"+r["id"],use_container_width=True): st.session_state.reminders=[x for x in st.session_state.reminders if x["id"]!=r["id"]]; st.rerun()
+                if st.button("Delete",key="del_"+r["id"],width="stretch"): st.session_state.reminders=[x for x in st.session_state.reminders if x["id"]!=r["id"]]; st.rerun()
     if not st.session_state.my_plants:
         st.info("No plants saved yet. Use the Add a plant box above to get started.")
     else:
@@ -1174,7 +1248,7 @@ elif page=="My Plants":
                         repeat=st.selectbox("Repeat",["One-time","Daily","Weekly","Every 30 days"],key=f"repeat_{p['common_name']}_v7")
                     custom=st.text_input("Custom task / note",placeholder="e.g. Check for aphids",key=f"custom_{p['common_name']}_v7")
                     notes=st.text_input("Notes (optional)",placeholder="e.g. Move near a bright window",key=f"notes_{p['common_name']}_v7")
-                    if st.form_submit_button("➕ Add reminder",type="primary",use_container_width=True):
+                    if st.form_submit_button("➕ Add reminder",type="primary",width="stretch"):
                         final_task=custom.strip() if task=="Custom" and custom.strip() else task; when=datetime.combine(reminder_date,reminder_time)
                         if when<now: st.warning("Choose a future date/time for a new reminder.")
                         else:
