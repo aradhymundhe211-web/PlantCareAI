@@ -1,26 +1,31 @@
-PlantCare AI
+PLANTCARE AI
 Created by Aradhy Mundhe
 
-A student project for plant photo exploration, a 56-profile plant library, practical species care guidance, visual leaf-colour screening, and care reminders.
+PlantCare AI is a student project for exploring 56 plant profiles, suggesting possible matches from a plant photo, providing general care guidance, and organising session-based care reminders.
 
-Highlights in this version:
-- Camera capture and gallery image upload.
-- Plant/object screening and possible BioCLIP-based plant matching when the model is available.
-- Alternative matches and a confidence band (not a calibrated probability).
-- Visual colour-pattern health screening with careful uncertainty wording.
-- Species profile information for light, watering, soil, fertilizer, humidity, pests, diseases and safety.
-- Home-page spoken introduction using the browser's speech synthesis; click Play to hear it.
-- Care Confidence Passport, separating visible photo evidence from facts a photo cannot prove.
-- No paid OpenAI or Gemini API key required.
+Key features
+- Camera capture and gallery upload for plant photos
+- Plant-identification shortlist with non-plant screening and uncertainty messages
+- Plant library and searchable care profiles
+- Visual leaf-colour screening (not a confirmed disease diagnosis)
+- PlantCare Care Confidence Passport: separates visible image clues from information a photo cannot establish
+- Browser-based spoken introduction on the Home page
+- My Plants and reminders with an explicit 12-hour AM/PM time selector
 
-Run locally:
-1. Use Python 3.11 or 3.12 in a virtual environment.
-2. Install dependencies with: pip install -r requirements.txt
-3. Start the app with: streamlit run app.py
+Run locally
+1. Install a compatible Python version and the packages listed in requirements.txt.
+2. Run: streamlit run app.py
+3. Open the local URL printed by Streamlit.
 
-Important accuracy note:
-A photo match is a suggestion, not a guaranteed identification. The model must be benchmarked on labelled photographs for all 56 supported species before claiming a specific accuracy. Similar species, camera quality, background, lighting, plant age and view angle can affect results. The visual health screen looks at broad colour patterns only; it cannot confirm a disease, measure soil moisture or nutrient levels, or determine roots' health. Check soil and leaves physically, and consult a local horticulture expert for persistent or severe problems.
+Deployment notes
+- Upload the contents of this folder to the repository root while preserving .streamlit/config.toml inside the .streamlit folder.
+- Streamlit Community Cloud must finish rebuilding after a commit before testing the hosted app.
+- Browser speech uses voices installed on the visitor's device. Pronunciation and voice quality can vary by browser/OS.
+- Reminders are currently session-scoped and are not guaranteed to survive a new session or browser reset.
 
-The browser voice depends on device/browser speech support. Care reminders and My Plants are currently session-based and may not persist after the session ends.
+Accuracy and safety
+- The app returns possible matches from its 56-plant library, not a guarantee that every image will be identified correctly.
+- Use clear, well-lit photos. Compare alternatives and the plant profile before acting on the result.
+- Visible leaf colours can flag patterns, but they do not confirm a disease or measure soil moisture, fertilizer/nutrient levels, or root health.
 
-See QA_REPORT.txt for what was checked and what still requires live deployment testing.
+See QA_REPORT.txt for the checks performed and limitations that remain.
