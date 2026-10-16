@@ -137,7 +137,7 @@ st.markdown(
     .pc-home-stat .symbol{font-size:2rem;line-height:1.1;margin-bottom:7px}
     .pc-home-stat .value{font-size:1.75rem;font-weight:950;color:#086b3d;line-height:1.2}
     .pc-home-stat .label{font-size:.95rem;color:#174634;font-weight:750;margin-top:4px}
-    .pc-home-hero{position:relative;overflow:hidden;color:#fff;border-radius:25px;padding:32px 34px;margin-bottom:22px;min-height:260px;background:linear-gradient(90deg,rgba(0,54,36,.96) 0%,rgba(0,84,49,.84) 43%,rgba(0,70,39,.18) 100%),url('https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=1800&q=85') center 48%/cover no-repeat;box-shadow:0 18px 40px rgba(9,70,39,.18)}
+    .pc-home-hero{position:relative;overflow:hidden;color:#fff;border-radius:25px;padding:32px 34px;margin-bottom:22px;min-height:260px;background:linear-gradient(90deg,rgba(0,54,36,.96) 0%,rgba(0,84,49,.84) 43%,rgba(0,70,39,.18) 100%),url('https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=1800&q=85') center 48%/cover no-repeat;box-shadow:0 18px 40px rgba(9,70,39,.18)}
     .pc-home-hero h1{font-size:clamp(2.6rem,4.4vw,3.8rem)!important;line-height:1.02!important;margin:0!important;color:#fff!important;letter-spacing:-.035em}
     .pc-home-hero .tagline{font-size:1.22rem;font-weight:700;color:#e4f5ba;margin-top:7px}
     .pc-home-hero .copy{font-size:1.13rem;max-width:660px;color:#fff;margin-top:14px;line-height:1.55}
@@ -379,6 +379,57 @@ st.markdown(
       }
       .pc-card, .pc-mini, .pc-stat, .pc-result, .pc-featured { padding: 17px !important; }
       .pc-home-hero { min-height: 245px !important; }
+    }
+
+
+    /* Reference screenshot finishing layer: consistent six-page botanical UI. */
+    :root { --pc-forest:#003b2b; --pc-deep:#002b20; --pc-green:#137b43; --pc-lime:#dff0b5; --pc-cream:#fbfaed; --pc-border:#d5e4c8; --pc-ink:#082f25; }
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] { background:#fbfaed !important; color:var(--pc-ink)!important; }
+    [data-testid="stMain"] .block-container { max-width:1760px!important; padding-top:1.7rem!important; padding-bottom:2.5rem!important; padding-left:clamp(1.3rem,2.5vw,2.8rem)!important; padding-right:clamp(1.3rem,2.5vw,2.8rem)!important; }
+    [data-testid="stSidebar"] { min-width:225px!important; background:linear-gradient(180deg,#003b2b 0%,#002d22 100%)!important; border-right:0!important; }
+    [data-testid="stSidebar"] * { color:#f4fff7!important; }
+    [data-testid="stSidebar"] .stButton>button { min-height:52px!important; padding:12px 14px!important; font-size:1.08rem!important; border-radius:12px!important; text-align:left!important; }
+    [data-testid="stSidebar"] .pc-brand-title { font-size:1.45rem!important; }
+    [data-testid="stSidebar"] .pc-brand-sub { font-size:1rem!important; }
+    .stMarkdown p, .stMarkdown li, [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li { font-size:1.12rem!important; line-height:1.65!important; }
+    .stMarkdown h1, [data-testid="stMarkdownContainer"] h1 { font-size:clamp(2.2rem,3vw,3.2rem)!important; line-height:1.12!important; font-weight:900!important; }
+    .stMarkdown h2, [data-testid="stMarkdownContainer"] h2 { font-size:2.05rem!important; line-height:1.2!important; font-weight:900!important; }
+    .stMarkdown h3, [data-testid="stMarkdownContainer"] h3 { font-size:1.55rem!important; line-height:1.3!important; font-weight:850!important; }
+    .pc-home-hero { min-height:300px!important; padding:clamp(28px,3vw,44px)!important; border-radius:24px!important; background-position:center 52%!important; }
+    .pc-home-hero h1 { font-size:clamp(2.8rem,4vw,4rem)!important; }
+    .pc-home-hero .tagline { font-size:1.35rem!important; }
+    .pc-home-hero .copy { font-size:1.2rem!important; }
+    .pc-hero { min-height:205px!important; padding:30px 32px!important; border-radius:22px!important; background-size:cover!important; background-position:center!important; }
+    .pc-hero h1, .pc-hero p, .pc-hero .pc-author { color:#fff!important; }
+    .pc-hero p { font-size:1.18rem!important; line-height:1.65!important; max-width:980px!important; }
+    .pc-card, .pc-stat, .pc-mini, .pc-featured, .pc-result { border-radius:18px!important; padding:22px!important; border-color:#d5e4c8!important; box-shadow:0 7px 22px rgba(17,65,38,.07)!important; }
+    .pc-title { font-size:1.85rem!important; line-height:1.3!important; margin-top:26px!important; }
+    .pc-home-stat { min-height:112px!important; padding:18px 12px!important; }
+    .pc-home-stat .value, .pc-stat-num { font-size:2rem!important; }
+    .pc-home-stat .label, .pc-stat-label { font-size:1.02rem!important; line-height:1.45!important; }
+    .pc-mini { min-height:150px!important; }
+    .pc-mini b { font-size:1.35rem!important; }
+    .pc-mini span { font-size:1.05rem!important; line-height:1.55!important; }
+    .pc-card h3, .pc-featured-body h3 { font-size:1.45rem!important; }
+    .pc-card p, .pc-featured-body p { font-size:1.08rem!important; line-height:1.65!important; }
+    .pc-pill, .pc-badge, .pc-check { font-size:1rem!important; padding:9px 14px!important; }
+    .stButton>button, [data-testid="stFormSubmitButton"] button, [data-testid="stDownloadButton"] button { min-height:52px!important; padding:12px 18px!important; font-size:1.08rem!important; font-weight:800!important; border-radius:13px!important; }
+    label, [data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p { font-size:1.08rem!important; font-weight:750!important; }
+    input, textarea, [data-baseweb="select"] *, [data-baseweb="input"] * { font-size:1.08rem!important; }
+    [data-testid="stTabs"] [role="tablist"] { gap:10px!important; }
+    [data-testid="stTabs"] button[role="tab"] { min-height:56px!important; padding:13px 20px!important; font-size:1.12rem!important; font-weight:800!important; }
+    [data-testid="stFileUploaderDropzone"] { min-height:132px!important; }
+    [data-testid="stFileUploaderDropzone"] * { font-size:1.06rem!important; }
+    .stCaption, [data-testid="stCaptionContainer"], small { font-size:1rem!important; line-height:1.55!important; }
+    .pc-footer { font-size:1rem!important; }
+    @media(max-width:900px) {
+      [data-testid="stMain"] .block-container { padding:1rem .9rem 2rem!important; }
+      .pc-home-hero { min-height:260px!important; padding:22px!important; }
+      .pc-hero { min-height:180px!important; padding:22px!important; }
+      .stMarkdown p, .stMarkdown li, [data-testid="stMarkdownContainer"] p { font-size:1.04rem!important; }
+      .stMarkdown h1, [data-testid="stMarkdownContainer"] h1 { font-size:2.1rem!important; }
+      .pc-card, .pc-stat, .pc-mini, .pc-featured, .pc-result { padding:17px!important; }
+      [data-testid="stTabs"] button[role="tab"] { min-height:50px!important; padding:10px 12px!important; font-size:1rem!important; }
     }
 
     </style>
@@ -1366,7 +1417,7 @@ if page=="Home":
 # Identify
 # -----------------------------------------------------------------------------
 elif page=="Identify a Plant":
-    st.markdown('<div class="pc-hero" style="padding:27px 30px;background:linear-gradient(110deg,#f7f7e8,#e3efd4)!important;color:#063b2b!important"><h1 style="font-size:2.45rem;color:#063b2b!important">🌿 Identify a Plant</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Take a photo or choose one from your gallery. PlantCare AI first checks whether the image actually contains a plant, then performs species matching. It will refuse a guess when the evidence is weak.</p><div class="pc-pills"><span class="pc-pill">🛡️ Non-plant gate</span><span class="pc-pill">🧠 Multi-view vision</span><span class="pc-pill">🌿 56-plant library</span><span class="pc-pill">⚠️ No forced guess</span></div></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-hero" style="padding:30px 32px;background:linear-gradient(90deg,rgba(0,54,36,.94),rgba(0,82,48,.78),rgba(0,70,39,.18)),url(https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=1600&q=85) center/cover!important;color:#fff!important"><h1 style="font-size:2.45rem;color:#063b2b!important">🌿 Identify a Plant</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Take a photo or choose one from your gallery. PlantCare AI first checks whether the image actually contains a plant, then performs species matching. It will refuse a guess when the evidence is weak.</p><div class="pc-pills"><span class="pc-pill">🛡️ Non-plant gate</span><span class="pc-pill">🧠 Multi-view vision</span><span class="pc-pill">🌿 56-plant library</span><span class="pc-pill">⚠️ No forced guess</span></div></div>',unsafe_allow_html=True)
 
     if "selected_image_bytes" not in st.session_state:
         st.session_state.selected_image_bytes = None
@@ -1580,7 +1631,7 @@ elif page=="Identify a Plant":
 
 
 elif page=="Plant Library":
-    st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">🌿 Plant Library</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Explore real reference photographs, botanical names, growing conditions and practical care profiles across the complete collection.</p><div class="pc-pills"><span class="pc-pill">📸 Reference photos</span><span class="pc-pill">🌱 56 plant profiles</span><span class="pc-pill">☀️ Growing conditions</span><span class="pc-pill">🐛 Pests & diseases</span></div></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-hero" style="padding:30px 32px;background:linear-gradient(90deg,rgba(0,54,36,.94),rgba(0,82,48,.74),rgba(0,70,39,.12)),url(https://images.unsplash.com/photo-1490750967868-88aa4486c946?auto=format&fit=crop&w=1600&q=85) center/cover!important"><h1 style="font-size:2.35rem;color:#fff!important">🌿 Plant Library</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Explore real reference photographs, botanical names, growing conditions and practical care profiles across the complete collection.</p><div class="pc-pills"><span class="pc-pill">📸 Reference photos</span><span class="pc-pill">🌱 56 plant profiles</span><span class="pc-pill">☀️ Growing conditions</span><span class="pc-pill">🐛 Pests & diseases</span></div></div>',unsafe_allow_html=True)
     query=st.text_input("Search the plant library",placeholder="Search by common name, scientific name or category…",key="library_search_v7")
     f1,f2=st.columns(2)
     categories=sorted({str(p.get("category","Other")) for p in PLANTS})
@@ -1604,7 +1655,7 @@ elif page=="Plant Library":
                 st.markdown('</div>',unsafe_allow_html=True)
 
 elif page=="Search":
-    st.markdown('<div class="pc-hero" style="padding:27px 30px;background:linear-gradient(110deg,#f7f7e8,#e3efd4)!important;color:#063b2b!important"><h1 style="font-size:2.45rem;color:#063b2b!important">🔎 Search Plants</h1><p>Start typing and choose a suggested plant, or search by common name, scientific name or category.</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-hero" style="padding:30px 32px;background:linear-gradient(90deg,rgba(0,54,36,.94),rgba(0,82,48,.78),rgba(0,70,39,.18)),url(https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=1600&q=85) center/cover!important;color:#fff!important"><h1 style="font-size:2.45rem;color:#063b2b!important">🔎 Search Plants</h1><p>Start typing and choose a suggested plant, or search by common name, scientific name or category.</p></div>',unsafe_allow_html=True)
     if "search_q" not in st.session_state: st.session_state.search_q=""
     q=st.text_input("Search plants",value=st.session_state.search_q,placeholder="Type mango, tulsi, rose…",key="search_box_v7")
     st.session_state.search_q=q; ql=q.strip().lower()
@@ -1634,7 +1685,7 @@ elif page=="Search":
                     st.session_state.selected_plant=p["common_name"]; st.rerun()
 
 elif page=="My Plants":
-    st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">❤️ My Plants</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Add your plants directly and create reminders for watering, fertilizer, sunlight, pest checks and other care tasks.</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-hero" style="padding:30px 32px;background:linear-gradient(90deg,rgba(0,54,36,.94),rgba(0,82,48,.76),rgba(0,70,39,.16)),url(https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=1600&q=85) center/cover!important"><h1 style="font-size:2.35rem;color:#fff!important">❤️ My Plants</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Add your plants directly and create reminders for watering, fertilizer, sunlight, pest checks and other care tasks.</p></div>',unsafe_allow_html=True)
     now=datetime.now()
     st.markdown("### ➕ Add a plant to My Plants")
     add_col1,add_col2=st.columns([2,1])
@@ -1694,7 +1745,7 @@ elif page=="My Plants":
                             st.session_state.reminders.append({"id":str(uuid.uuid4()),"plant":p["common_name"],"task":final_task,"when":when.isoformat(timespec="minutes"),"repeat":repeat,"notes":notes.strip(),"done":False}); st.success("Reminder added."); st.rerun()
 
 elif page=="About":
-    st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">ℹ️ About PlantCare AI</h1><p>A student project focused on plant identification, plant education and practical care information.</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-hero" style="padding:30px 32px;background:linear-gradient(90deg,rgba(0,54,36,.94),rgba(0,82,48,.76),rgba(0,70,39,.16)),url(https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1600&q=85) center/cover!important"><h1 style="font-size:2.35rem;color:#fff!important">ℹ️ About PlantCare AI</h1><p>A student project focused on plant identification, plant education and practical care information.</p></div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-card"><h3>PlantCare AI — Made by Aradhy Mundhe</h3><p>This project was created by <b>Aradhy Mundhe</b> as a student project for plant identification, plant education and practical plant care.</p></div><div class="pc-card"><h3>What changed in this updated version?</h3><p>• Added a two-stage safety gate: general-object screening before plant species matching, followed by biological vision checks.<br>• Kept the offline-safe local visual screening so a model-loading problem does not crash the app.<br>• Reworked the sidebar into clear, large navigation buttons.<br>• Converted the interface to a consistent white-and-green theme.<br>• Added multi-view camera/gallery analysis, visual health screening, care requirements and clearer uncertainty messages.<br>• No OpenAI key, Gemini key or paid API is required.</p></div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-title">Sharing</div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-info"><b>For your teacher:</b> the easiest experience is a public hosted URL. A <code>localhost</code> address only works on the computer running PlantCare AI. The included launcher is for local use; online sharing requires deployment to a web host.</div>',unsafe_allow_html=True)
