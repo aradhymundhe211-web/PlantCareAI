@@ -78,6 +78,49 @@ st.markdown(
     .pc-upload-card{background:#fff;border:1px solid #cfe2d5;border-radius:16px;padding:14px 16px;margin-bottom:8px}.pc-upload-title{font-weight:900;color:#0b6b39}.pc-upload-sub{font-size:.82rem;color:#64766b;margin-top:3px}.pc-selected-label{background:#eaf8ef;color:#116335;border:1px solid #cde8d4;border-radius:12px;padding:9px 12px;font-weight:800;margin:12px 0}.pc-analyze-box{background:#f3fbf6;border:1px solid #cce5d3;border-radius:16px;padding:14px 16px;margin:12px 0}.pc-analyze-box span{color:#64766b;font-size:.84rem}.pc-photo-placeholder{height:230px;border-radius:18px;background:#eff9f2;border:1px dashed #b7d4bf;display:flex;align-items:center;justify-content:center;text-align:center;flex-direction:column;color:#0b6b39;font-size:1.15rem}.pc-photo-placeholder span{color:#64766b;font-size:.8rem;margin-top:4px}
 .pc-score{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#f0fbf4,#fff);border:1px solid #cce5d3;border-radius:18px;padding:15px 17px}.pc-score-ring{width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#138a4b;color:#fff;font-weight:950;font-size:1.05rem;box-shadow:0 8px 18px rgba(19,138,75,.18)}.pc-score-copy{flex:1}.pc-score-title{font-weight:900;color:#0b6b39}.pc-score-sub{font-size:.82rem;color:#64766b;margin-top:3px}.pc-library-count{font-size:.82rem;color:#64766b;font-weight:800;margin:8px 0 16px}.pc-featured{border-radius:22px;overflow:hidden;border:1px solid var(--line);background:#fff;box-shadow:0 10px 28px rgba(22,55,35,.05);padding-bottom:12px}.pc-featured-body{padding:6px 17px 10px}.pc-featured-body h3{margin:0;color:var(--ink)}.pc-featured-body p{margin:5px 0 0;color:var(--muted);font-size:.86rem}.pc-reject{background:linear-gradient(135deg,#fff5f5,#fff);border:1px solid #efcaca;border-radius:20px;padding:18px 20px}.pc-reject-title{font-size:1.15rem;font-weight:950;color:#8a2020}.pc-checklist{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.pc-check{background:#f5fbf7;border:1px solid #d5e9da;border-radius:999px;padding:6px 10px;font-size:.78rem;font-weight:800;color:#315f43}
     @media(max-width:900px){.pc-hero{padding:25px 22px}.pc-hero h1{font-size:2.2rem}}
+
+    /* Reference-inspired PlantCare AI visual refresh */
+    .stApp{background:linear-gradient(180deg,#f4f8e9 0%,#fffdf3 45%,#f6f9e8 100%)!important;color:#073b2b!important;font-size:1.12rem!important}
+    .stMarkdown p,.stMarkdown li{font-size:1.08rem!important;line-height:1.62!important}
+    .stMarkdown h1{font-size:2.7rem!important;font-weight:900!important}
+    .stMarkdown h2{font-size:2.05rem!important;font-weight:900!important}
+    .stMarkdown h3{font-size:1.38rem!important;font-weight:850!important}
+    [data-testid="stSidebar"]{background:linear-gradient(180deg,#003c2c 0%,#002e23 100%)!important;border-right:0!important}
+    [data-testid="stSidebar"] *{color:#f4fff7!important}
+    [data-testid="stSidebar"] .pc-brand-title{font-size:1.3rem!important;color:#fff!important}
+    [data-testid="stSidebar"] .pc-brand-sub{color:#d4eee0!important}
+    [data-testid="stSidebar"] .pc-nav-title{color:#a8d4bc!important}
+    [data-testid="stSidebar"] .pc-page-byline{color:#c7e7d4!important}
+    [data-testid="stSidebar"] .pc-page-byline strong{color:#fff!important}
+    [data-testid="stSidebar"] .pc-card{background:rgba(255,255,255,.08)!important;border-color:rgba(210,244,222,.24)!important}
+    [data-testid="stSidebar"] .pc-card div{color:#f4fff7!important}
+    [data-testid="stSidebar"] .stButton>button{background:transparent!important;color:#eafff0!important;border:1px solid transparent!important;border-radius:12px!important;min-height:44px!important;font-size:1rem!important;box-shadow:none!important;text-align:left!important}
+    [data-testid="stSidebar"] .stButton>button:hover{background:rgba(255,255,255,.12)!important;border-color:rgba(255,255,255,.18)!important;color:#fff!important}
+    [data-testid="stSidebar"] .stButton>button[kind="primary"]{background:linear-gradient(135deg,#138c50,#0a6d3c)!important;border-color:#3aa86c!important;color:#fff!important;box-shadow:0 7px 18px rgba(0,0,0,.18)!important}
+    .pc-hero{border-radius:24px!important;box-shadow:0 18px 38px rgba(4,70,40,.16)!important}
+    .pc-card,.pc-stat,.pc-mini,.pc-featured{border-radius:18px!important;border-color:#dce7c9!important;background:rgba(255,255,249,.94)!important;box-shadow:0 7px 22px rgba(17,65,38,.06)!important}
+    .pc-title{font-size:1.8rem!important;color:#063e2b!important}
+    .pc-pills .pc-pill{font-size:.94rem!important}
+    .pc-stat-num{font-size:2rem!important}
+    .stButton>button{font-size:1.06rem!important;min-height:48px!important}
+    label,[data-testid="stWidgetLabel"] p{font-size:1.04rem!important}
+    input,textarea,[data-baseweb="select"]{font-size:1.02rem!important}
+    .pc-home-stat{height:100%;text-align:center;background:rgba(255,255,248,.96);border:1px solid #dce7c9;border-radius:17px;padding:17px 10px;box-shadow:0 6px 18px rgba(14,75,43,.06)}
+    .pc-home-stat .symbol{font-size:2rem;line-height:1.1;margin-bottom:7px}
+    .pc-home-stat .value{font-size:1.75rem;font-weight:950;color:#086b3d;line-height:1.2}
+    .pc-home-stat .label{font-size:.95rem;color:#174634;font-weight:750;margin-top:4px}
+    .pc-home-hero{position:relative;overflow:hidden;color:#fff;border-radius:25px;padding:32px 34px;margin-bottom:22px;min-height:260px;background:linear-gradient(90deg,rgba(0,58,36,.95) 0%,rgba(0,87,47,.84) 44%,rgba(0,80,42,.18) 100%),url('https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=1800&q=85') center 48%/cover no-repeat;box-shadow:0 18px 40px rgba(9,70,39,.18)}
+    .pc-home-hero h1{font-size:clamp(2.6rem,4.4vw,3.8rem)!important;line-height:1.02!important;margin:0!important;color:#fff!important;letter-spacing:-.035em}
+    .pc-home-hero .tagline{font-size:1.22rem;font-weight:700;color:#e4f5ba;margin-top:7px}
+    .pc-home-hero .copy{font-size:1.13rem;max-width:660px;color:#fff;margin-top:14px;line-height:1.55}
+    .pc-home-hero .eyebrow{font-size:.92rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#d8f0a8}
+    .pc-home-hero .mark{display:flex;align-items:center;gap:16px;margin-bottom:7px}
+    .pc-home-hero .leaf-icon{width:70px;height:70px;display:flex;align-items:center;justify-content:center;border-radius:22px;background:linear-gradient(145deg,#f2facb,#fff);font-size:2.6rem;box-shadow:0 6px 18px #002e2370}
+    .pc-home-hero .pc-pills{margin-top:18px}
+    .pc-home-hero .pc-pill{background:rgba(255,255,255,.17);border-color:rgba(255,255,255,.4)}
+    .pc-journey .pc-mini{min-height:140px}
+    @media(max-width:900px){.pc-home-hero{padding:24px 20px;min-height:230px}.pc-home-hero h1{font-size:2.5rem!important}.stMarkdown p,.stMarkdown li{font-size:1.02rem!important}}
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -1044,7 +1087,11 @@ page=st.session_state.page
 # Home
 # -----------------------------------------------------------------------------
 if page=="Home":
-    st.markdown('<div class="pc-hero" style="background:radial-gradient(circle at 88% 12%,rgba(240,247,181,.42),transparent 25%),linear-gradient(135deg,#084f2b,#0b6b39 52%,#269a57)"><div style="display:flex;align-items:center;gap:15px;margin-bottom:12px"><div style="width:66px;height:66px;border-radius:22px;background:linear-gradient(145deg,#eaf8bd,#fff);display:flex;align-items:center;justify-content:center;font-size:38px;box-shadow:0 8px 22px rgba(0,0,0,.12)">🌿</div><div><div style="font-size:.9rem;font-weight:850;letter-spacing:.12em;color:#d8f0b0;text-transform:uppercase">Smarter care for healthier plants</div><div style="font-size:clamp(2.4rem,4.5vw,3.65rem);font-weight:950;letter-spacing:-.045em;line-height:1.05;color:#fff">PlantCare AI</div></div></div><p>🌱 Identify a plant, discover its needs, and build better care habits — all in one friendly place.</p><div class="pc-author">✨ Made by Aradhy Mundhe</div><div class="pc-pills"><span class="pc-pill">📸 Photo identification</span><span class="pc-pill">🌿 56 plant profiles</span><span class="pc-pill">🛡️ Smart rejection</span><span class="pc-pill">💚 Practical care guidance</span></div></div>',unsafe_allow_html=True)
+    st.markdown('''<div class="pc-home-hero"><div class="eyebrow">Smarter care for healthier plants</div><div class="mark"><div class="leaf-icon">🌿</div><div><h1>PlantCare AI</h1><div class="tagline">Healthy Plants&nbsp; 🌿 Greener Tomorrow</div></div></div><div class="copy">Identify a plant, discover its needs, and build better care habits — all in one friendly place.</div><div class="copy" style="font-size:.98rem;margin-top:4px">✨ Made by Aradhy Mundhe</div><div class="pc-pills"><span class="pc-pill">📸 Photo identification</span><span class="pc-pill">🌿 56 plant profiles</span><span class="pc-pill">🛡️ Smart rejection</span><span class="pc-pill">💚 Practical care guidance</span></div></div>''',unsafe_allow_html=True)
+    stat_cols=st.columns(4)
+    for col,emoji,value,label in zip(stat_cols,["🌱","🎯","💚","🌎"],[str(len(PLANTS)),"AI","Care","Green"],["Plant Species","Photo Identification","Plant Care Support","Greener Future"]):
+        with col:
+            st.markdown(f'<div class="pc-home-stat"><div class="symbol">{emoji}</div><div class="value">{value}</div><div class="label">{label}</div></div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-title">🌼 Start exploring</div>',unsafe_allow_html=True)
     a,b,c=st.columns(3)
     for col,title,desc in [(a,"📸 Identify a Plant","Take a photo or upload an image to find a possible plant match, then review its care profile."),(b,"🌳 Explore the Plant Library","Browse plant photos, botanical names, growing conditions, common problems and safety information."),(c,"🪴 My Plants & Reminders","Keep track of your plants and set reminders for watering, sunlight, pruning and other care tasks.")]:
@@ -1059,7 +1106,7 @@ if page=="Home":
 # Identify
 # -----------------------------------------------------------------------------
 elif page=="Identify a Plant":
-    st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">📷 Identify a Plant</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Take a photo or choose one from your gallery. PlantCare AI first checks whether the image actually contains a plant, then performs species matching. It will refuse a guess when the evidence is weak.</p><div class="pc-pills"><span class="pc-pill">🛡️ Non-plant gate</span><span class="pc-pill">🧠 Multi-view vision</span><span class="pc-pill">🌿 56-plant library</span><span class="pc-pill">⚠️ No forced guess</span></div></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-hero" style="padding:27px 30px;background:linear-gradient(110deg,#f6f8e8,#e6f1d9)!important;color:#063b2b!important"><h1 style="font-size:2.45rem;color:#063b2b!important">🌿 Identify a Plant</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Take a photo or choose one from your gallery. PlantCare AI first checks whether the image actually contains a plant, then performs species matching. It will refuse a guess when the evidence is weak.</p><div class="pc-pills"><span class="pc-pill">🛡️ Non-plant gate</span><span class="pc-pill">🧠 Multi-view vision</span><span class="pc-pill">🌿 56-plant library</span><span class="pc-pill">⚠️ No forced guess</span></div></div>',unsafe_allow_html=True)
 
     if "selected_image_bytes" not in st.session_state:
         st.session_state.selected_image_bytes = None
@@ -1297,7 +1344,7 @@ elif page=="Plant Library":
                 st.markdown('</div>',unsafe_allow_html=True)
 
 elif page=="Search":
-    st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">🔎 Search Plants</h1><p>Start typing and choose a suggested plant, or search by common name, scientific name or category.</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-hero" style="padding:27px 30px;background:linear-gradient(110deg,#f6f8e8,#e6f1d9)!important;color:#063b2b!important"><h1 style="font-size:2.45rem;color:#063b2b!important">🔎 Search Plants</h1><p>Start typing and choose a suggested plant, or search by common name, scientific name or category.</p></div>',unsafe_allow_html=True)
     if "search_q" not in st.session_state: st.session_state.search_q=""
     q=st.text_input("Search plants",value=st.session_state.search_q,placeholder="Type mango, tulsi, rose…",key="search_box_v7")
     st.session_state.search_q=q; ql=q.strip().lower()
