@@ -940,7 +940,7 @@ def vision_gate(img: Image.Image):
             cps,cts,ctx_margin,doc_score=bioclip_context_screen(img)
         except Exception:
             cps,cts,ctx_margin,doc_score=plant_score,0.0,plant_score,_document_visual_score(img)
-        if (cts>=29.0 and ctx_margin<=-1.5) or (doc_score>=.70 and ctx_margin<3.0):
+        if cts>=32.0 and ctx_margin<=-2.5:
             return False,doc_score,"The image appears to contain mostly text or document content",{"gate":"document_screen","document_score":doc_score}
         if object_score>=29.0 and margin<=-3.5:
             return False,max(0,min(1,object_score/100)),"The photo appears to show an object rather than a plant",{"gate":"bioclip_object","margin":margin}
@@ -1015,7 +1015,22 @@ def plant_gate(img: Image.Image) -> Tuple[bool,float,str,dict]:
     # The fallback gate is intentionally permissive for real plants; the
     # species model and the explicit non-plant check are responsible for the
     # final decision when available. This avoids rejecting warm-lit mango/tulsi.
-    is_plant=(f["green_ratio"] >= .045 and f["sat"] >= .16) or (f["leafy_green_ratio"] >= .025) or (f["green_ratio"] >= .025 and f["yellow_ratio"] >= .08 and f["sat"] >= .30) or (f["red_ratio"] >= .08 and f["sat"] >= .25 and f["edge"] >= .08)
+    # Accept several botanical visual patterns, not just green foliage. A close-up
+    # of a marigold or other flower may contain little green; a tulsi photo may be
+    # warm-lit or partly shadowed. Color alone is never used to name a species,
+    # but color + visible texture/edges can pass the presence screen to BioCLIP.
+    foliage_signal = (
+        f["green_ratio"] >= .025 and f["sat"] >= .12
+    ) or f["leafy_green_ratio"] >= .018
+    flower_signal = (
+        f["yellow_ratio"] >= .035 or f["red_ratio"] >= .035
+    ) and f["sat"] >= .22 and f["edge"] >= .035
+    mixed_plant_signal = (
+        (f["green_ratio"] >= .015 or f["leafy_green_ratio"] >= .012)
+        and (f["yellow_ratio"] + f["red_ratio"] >= .018)
+        and f["edge"] >= .025
+    )
+    is_plant = bool(foliage_signal or flower_signal or mixed_plant_signal)
     reason="Plant-like vegetation/color/texture detected" if is_plant else "The photo does not contain enough plant-like visual evidence"
     return is_plant,score,reason,f
 
@@ -1422,64 +1437,7 @@ logo_svg = """<svg viewBox="0 0 64 64" width="64" height="64" role="img" aria-la
 
 if page=="Home":
     st.markdown('''<div class="pc-home-hero"><div class="eyebrow">Smarter care for healthier plants</div><div class="mark"><div class="leaf-icon"></div><div><h1>PlantCare AI</h1><div class="tagline">Healthy Plants&nbsp; 🌿 Greener Tomorrow</div></div></div><div class="copy">Identify a plant, discover its needs, and build better care habits — all in one friendly place.</div><div class="copy" style="font-size:.98rem;margin-top:4px">✨ Made by Aradhy Mundhe</div><div class="pc-pills"><span class="pc-pill">📸 Photo identification</span><span class="pc-pill">🌿 56 plant profiles</span><span class="pc-pill">🛡️ Smart rejection</span><span class="pc-pill">💚 Practical care guidance</span></div></div>''',unsafe_allow_html=True)
-    # Accessible, browser-native spoken introduction. Audio starts only after the
-    # visitor clicks the button inside this component (avoids autoplay blocking).
-    # The visible byline remains exactly “Aradhy Mundhe”. This separate speech-only
-    # spelling encourages common browser voices to say the long first “Aa” and the
-    # surname more naturally; actual pronunciation still varies by installed voice.
-    intro_text = (
-        "Welcome to PlantCare AI, created by Aaraadhy Moon-dhay. "
-        "This student-built project brings plant learning and everyday care into one place. "
-        "You can take a photo or upload one from your gallery, explore a library of 56 plant profiles, "
-        "compare possible plant matches, and learn each plant’s light, watering, soil and fertilizer needs. "
-        "You can also review visible leaf colour patterns, learn about common pest and disease warning signs, "
-        "save plants, and set care reminders for a time that suits you. "
-        "Our special feature is the PlantCare Care Confidence Passport. It separates clues visible in a photo "
-        "from things a camera cannot prove, such as soil moisture, nutrient levels, root health or a confirmed disease. "
-        "That means we aim to give helpful guidance without pretending that a photo can tell us everything. "
-        "For the best results, use a clear, well-lit image and check important symptoms closely. "
-        "Thank you for visiting PlantCare AI. Identify, learn, and care."
-    )
-    intro_json = json.dumps(intro_text).replace("</", "<\\/")
-    st.components.v1.html(f'''
-      <div style="font-family:Arial,sans-serif;border:1px solid #cfe2d5;border-radius:14px;padding:12px 14px;background:#f5fbf5;color:#173225">
-        <div style="font-weight:700;margin-bottom:5px">🔊 Meet PlantCare AI — spoken introduction</div>
-        <div style="font-size:14px;line-height:1.5;margin-bottom:10px">Hear what the app does and who created it.</div>
-        <button id="pc-intro-play" type="button" style="cursor:pointer;border:0;border-radius:10px;padding:10px 15px;background:#0b6b39;color:white;font-weight:700">▶ Play introduction</button>
-        <button id="pc-intro-stop" type="button" style="cursor:pointer;border:1px solid #b9d5c3;border-radius:10px;padding:10px 15px;background:white;color:#173225;font-weight:700;margin-left:6px">■ Stop</button>
-        <span id="pc-intro-status" aria-live="polite" style="font-size:12px;margin-left:8px"></span>
-      </div>
-      <script>
-      (function(){{
-        const text = {intro_json};
-        const play = document.getElementById('pc-intro-play');
-        const stop = document.getElementById('pc-intro-stop');
-        const status = document.getElementById('pc-intro-status');
-        play.addEventListener('click', function(){{
-          if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {{ status.textContent='Voice is not supported by this browser.'; return; }}
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance(text);
-          const voices = window.speechSynthesis.getVoices();
-          // Prefer a natural Indian-English voice when available, then fall back to
-          // another English voice installed on the visitor’s device.
-          const preferred = voices.find(v => /^en-IN$/i.test(v.lang) && /Google|Microsoft|India|Indian/i.test(v.name))
-            || voices.find(v => /^en-IN$/i.test(v.lang))
-            || voices.find(v => /^en-GB$/i.test(v.lang))
-            || voices.find(v => /^en-US$/i.test(v.lang))
-            || voices.find(v => /^en/i.test(v.lang));
-          if (preferred) {{ utterance.voice = preferred; utterance.lang = preferred.lang; }}
-          else {{ utterance.lang = 'en-IN'; }}
-          utterance.rate = 0.86; utterance.pitch = 1.02;
-          utterance.onstart = () => status.textContent = preferred ? ('Speaking with ' + preferred.name + '…') : 'Speaking with your default device voice…';
-          utterance.onend = () => status.textContent='Introduction finished.';
-          utterance.onerror = () => status.textContent='Voice playback was blocked or interrupted. Try another browser voice in your device settings.';
-          window.speechSynthesis.speak(utterance);
-        }});
-        stop.addEventListener('click', function(){{ if ('speechSynthesis' in window) window.speechSynthesis.cancel(); status.textContent='Stopped.'; }});
-      }})();
-      </script>
-    ''', height=125)
-
+    # The spoken introduction was removed for the competition demo; written credits remain.
     stat_cols=st.columns(4)
     for col,emoji,value,label in zip(stat_cols,["🌱","🎯","💚","🌎"],[str(len(PLANTS)),"AI","Care","Green"],["Plant Species","Photo Identification","Plant Care Support","Greener Future"]):
         with col:
@@ -1576,7 +1534,7 @@ elif page=="Identify a Plant":
 
             if analyze:
                 sharp,bright,mindim=image_quality(image)
-                if mindim<140 or bright<10 or bright>252 or sharp<4:
+                if mindim<120 or bright<6 or bright>253 or sharp<1.5:
                     st.session_state.analysis=None
                     st.markdown('<div class="pc-warning"><b>🟡 Photo quality is too low.</b><br>Use daylight and move closer so leaves, flowers or the whole plant are clearly visible.</div>',unsafe_allow_html=True)
                 else:
@@ -1616,7 +1574,7 @@ elif page=="Identify a Plant":
                                     pass
                             try:
                                 ctx_plant,ctx_text,ctx_margin,doc_score=bioclip_context_screen(image)
-                                if (ctx_text>=31.0 and ctx_margin<=-2.0) or (doc_score>=.72 and ctx_margin<3.0):
+                                if ctx_text>=34.0 and ctx_margin<=-2.5:
                                     reject_object=True
                                     object_reason="The image appears to contain mostly text or document content, not a plant."
                             except Exception:
@@ -1699,6 +1657,22 @@ elif page=="Identify a Plant":
                 plant_photo(p, photo_map=alt_map)
             with col2:
                 st.markdown(f'<div class="pc-card"><h3>{p["common_name"]}</h3><p><i>{p["scientific_name"]}</i><br>Visual score: {s:.3f}</p></div>',unsafe_allow_html=True)
+
+        # Exclusive single-session feature: Plant Look-Alike Showdown.
+        # This compares model-ranked candidates using the existing botanical profile,
+        # rather than pretending the vision model directly measured every trait.
+        compare_rows=result["rows"][:3]
+        if len(compare_rows) >= 2:
+            st.markdown("### 🔬 Plant Look-Alike Showdown")
+            st.caption("Compare the leading candidates using their stored botanical descriptions. These are reference traits, not proof that every trait is visible in this photo.")
+            compare_cols=st.columns(len(compare_rows))
+            trait_fields=[("Leaf clues","leaf"),("Flower clues","flower"),("Growth habit","growth"),("Identification clues","identification")]
+            for col,(candidate,match_score) in zip(compare_cols,compare_rows):
+                with col:
+                    st.markdown(f'<div class="pc-card"><h3>{candidate.get("common_name","Plant")}</h3><p><i>{candidate.get("scientific_name","")}</i></p><p><b>Model match:</b> {match_score:.3f}</p></div>',unsafe_allow_html=True)
+                    for trait_label,trait_key in trait_fields:
+                        trait_value=str(candidate.get(trait_key, "Not listed" ) or "Not listed")
+                        st.markdown(f'<div class="pc-mini" style="margin:6px 0"><b>{trait_label}</b><span>{trait_value[:260]}</span></div>',unsafe_allow_html=True)
         health=result.get("health")
         if health:
             st.markdown("### 🩺 Visual health screening")
@@ -1923,7 +1897,6 @@ elif page=="About":
         st.markdown('<div class="pc-card"><h3>Project Information</h3><p><b>Project Name:</b> PlantCare AI<br><b>Developed by:</b> Aradhy Mundhe<br><b>Technologies:</b> Python, Streamlit, PyTorch, OpenCLIP, BioCLIP<br><b>Total Plant Species:</b> 56<br><b>Deployment:</b> Streamlit Community Cloud<br><b>Live Website:</b> <a href="https://plantcareai-kznq8jblfdsk3u5jvsw9rt.streamlit.app" target="_blank">Open PlantCare AI</a></p></div>',unsafe_allow_html=True)
         st.markdown('<div class="pc-card" style="display:flex;align-items:center;gap:22px;flex-wrap:wrap"><img class="pc-about-qr" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZoAAAGaAQAAAAAefbjOAAAC/klEQVR4nO2cQW7jMAxFP0cCsrSBHKBHka/WI+UG9lFygAHkZQEZfxYUHbuzSlvYqU0vhLj2QySEIPlJqUI8fQ1/nmcAhxxyyCGHHHLomJDUK0K6UUSkBUTaSUTaSYDRXuh2mZ5D20OJJJkBoCn6J/J+IXmPABBIklxD203Poe2hsToA9mMEmScx2wiUDoCIxP2m59BmUPx0L0AowNhC0PyNBABi3Gt6Du0OsW8+BBomMiAd6vDj3+TQa0MNyR4A0j0CQwsd+N7WF0iW/abn0GZQjRqDAAACJN1CkZSvkHS/UFK+AsAk+0zPoc0htYhlKbspmjhweLNP6xdefk0OfQeCqsqUAfaoA1IOagPsGxIpB7JvSlWp/YuvyaHvQNVHDG0oSJwiqtYAkG4tBM0UiXESYnT1eQZIfQSZAfYI1ByT6hSonkH9BtxHnAKqUUO1hg2Y1SeSDTV+uEUcHao+oqYLs8sgLXHIK6OhW8TRIfu5AajMmH/9lTEUrUe4RRwfwsIf6K3JDL1SDpZluI84BbRSn5oplKo+VXPCZClzcIs4AbSIC5jzSVUY2hxHoIqQ5BZxCmhOJau0RGJZOwVzGXCtcQpIq06CJhODhPLpsQCBwDgJ0i0Wbj09h/aCkm6RqY1wrUIMb6U+GNpAe7rL9BzaQX0Gq0vZLXtY4ZIWSTxqnArSnGEQ21WX+CHSYRIRucxGs9v0HNoGmrvhkyDdWiDlq26tEzSZok/HKyRx8qhxAmhRoap9DcBUR8YsMwoeFU2PGoeGrEJlIlOzB64kqL5YtalbxMGhZWvr0cNYFLXnQoV3us4EPc50YVYdSCyQbowAxlj74vtMz6E9ogapEaK2tmzoAfMR9sl9xKGhRadr2dqyRHPxona/3CKODv13pisREOBiTuF2LQCmuDzY9eJrcujHodVZnkk0j8Bjx+VvXJNDT0JWiuC7iHY4RN6Kqk/psD7v90vW5NBXoNWuOlMY1RUgzHuxl10PzyMODYn/ZzKHHHLIIYcccuiL0D8b8JWmdpC6LAAAAABJRU5ErkJggg==" alt="QR code to open PlantCare AI"><div><h3>📱 Scan to open PlantCare AI</h3><p>Open your phone camera and point it at the QR code.</p><p><a href="https://plantcareai-kznq8jblfdsk3u5jvsw9rt.streamlit.app" target="_blank">plantcareai-kznq8jblfdsk3u5jvsw9rt.streamlit.app</a></p></div></div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-card"><h3>PlantCare AI — Made by Aradhy Mundhe</h3><p>This project was created by <b>Aradhy Mundhe</b> as a student project for plant identification, plant education and practical plant care.</p></div><div class="pc-card"><h3>What changed in this updated version?</h3><p>• Added a two-stage safety gate: general-object screening before plant species matching, followed by biological vision checks.<br>• Kept the offline-safe local visual screening so a model-loading problem does not crash the app.<br>• Reworked the sidebar into clear, large navigation buttons.<br>• Converted the interface to a consistent white-and-green theme.<br>• Added multi-view camera/gallery analysis, visual health screening, care requirements and clearer uncertainty messages.<br>• No OpenAI key, Gemini key or paid API is required.</p></div>',unsafe_allow_html=True)
-    st.markdown('<div class="pc-info"><b>🔊 Spoken introduction:</b> The Home page includes a browser-based voice introduction explaining PlantCare AI, its creator, and its main features. Voice availability depends on the visitor’s browser and device.</div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-title">Sharing</div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-info"><b>For your teacher:</b> the easiest experience is a public hosted URL. A <code>localhost</code> address only works on the computer running PlantCare AI. The included launcher is for local use; online sharing requires deployment to a web host.</div>',unsafe_allow_html=True)
 
