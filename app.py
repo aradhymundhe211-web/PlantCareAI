@@ -7,6 +7,7 @@ import re
 import os
 from pathlib import Path
 from datetime import datetime, date, time, timedelta
+from zoneinfo import ZoneInfo
 import uuid
 from typing import Dict, List, Tuple
 
@@ -18,6 +19,18 @@ from PIL import Image, ImageOps, ImageFilter, ImageDraw
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_FILE = APP_DIR / "plant_data.json"
+INDIA_TZ = ZoneInfo("Asia/Kolkata")
+
+def india_now_naive() -> datetime:
+    """Return Indian local time as a naive datetime for legacy reminder storage."""
+    return datetime.now(INDIA_TZ).replace(tzinfo=None)
+
+def time_from_12h(hour_12: int, minute: int, period: str) -> time:
+    """Convert an explicit 12-hour clock selection into Python's 24-hour time."""
+    hour_24 = hour_12 % 12
+    if period.upper() == "PM":
+        hour_24 += 12
+    return time(hour_24, minute)
 
 st.set_page_config(
     page_title="PlantCare AI",
@@ -423,7 +436,7 @@ if "notified_reminder_ids" not in st.session_state:
 @st.fragment(run_every="10s")
 def render_due_reminder_alerts():
     """Refresh due reminders while My Plants is open; attempt browser audio/voice."""
-    now_local = datetime.now()
+    now_local = india_now_naive()
     due = []
     for reminder in st.session_state.get("reminders", []):
         try:
@@ -1411,13 +1424,20 @@ if page=="Home":
     st.markdown('''<div class="pc-home-hero"><div class="eyebrow">Smarter care for healthier plants</div><div class="mark"><div class="leaf-icon"></div><div><h1>PlantCare AI</h1><div class="tagline">Healthy Plants&nbsp; 🌿 Greener Tomorrow</div></div></div><div class="copy">Identify a plant, discover its needs, and build better care habits — all in one friendly place.</div><div class="copy" style="font-size:.98rem;margin-top:4px">✨ Made by Aradhy Mundhe</div><div class="pc-pills"><span class="pc-pill">📸 Photo identification</span><span class="pc-pill">🌿 56 plant profiles</span><span class="pc-pill">🛡️ Smart rejection</span><span class="pc-pill">💚 Practical care guidance</span></div></div>''',unsafe_allow_html=True)
     # Accessible, browser-native spoken introduction. Audio starts only after the
     # visitor clicks the button inside this component (avoids autoplay blocking).
+    # The visible byline remains exactly “Aradhy Mundhe”. This separate speech-only
+    # spelling encourages common browser voices to say the long first “Aa” and the
+    # surname more naturally; actual pronunciation still varies by installed voice.
     intro_text = (
-        "Welcome to PlantCare AI, created by Aradhy Mundhe. "
-        "This student project helps you explore 56 plant profiles, upload or take a plant photo, "
-        "review possible plant matches, learn sunlight and watering needs, check common pests and diseases, "
-        "and organise plant-care reminders. Our special Care Confidence Passport separates visible photo clues "
-        "from information a photo cannot prove, so we do not pretend to diagnose every disease or measure soil and fertilizer. "
-        "For the best results, use a clear, well-lit photo and confirm important findings with a close inspection. "
+        "Welcome to PlantCare AI, created by Aaraadhy Moon-dhay. "
+        "This student-built project brings plant learning and everyday care into one place. "
+        "You can take a photo or upload one from your gallery, explore a library of 56 plant profiles, "
+        "compare possible plant matches, and learn each plant’s light, watering, soil and fertilizer needs. "
+        "You can also review visible leaf colour patterns, learn about common pest and disease warning signs, "
+        "save plants, and set care reminders for a time that suits you. "
+        "Our special feature is the PlantCare Care Confidence Passport. It separates clues visible in a photo "
+        "from things a camera cannot prove, such as soil moisture, nutrient levels, root health or a confirmed disease. "
+        "That means we aim to give helpful guidance without pretending that a photo can tell us everything. "
+        "For the best results, use a clear, well-lit image and check important symptoms closely. "
         "Thank you for visiting PlantCare AI. Identify, learn, and care."
     )
     intro_json = json.dumps(intro_text).replace("</", "<\\/")
@@ -1439,10 +1459,20 @@ if page=="Home":
           if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {{ status.textContent='Voice is not supported by this browser.'; return; }}
           window.speechSynthesis.cancel();
           const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = 'en-IN'; utterance.rate = 0.92;
-          utterance.onstart = () => status.textContent='Speaking…';
+          const voices = window.speechSynthesis.getVoices();
+          // Prefer a natural Indian-English voice when available, then fall back to
+          // another English voice installed on the visitor’s device.
+          const preferred = voices.find(v => /^en-IN$/i.test(v.lang) && /Google|Microsoft|India|Indian/i.test(v.name))
+            || voices.find(v => /^en-IN$/i.test(v.lang))
+            || voices.find(v => /^en-GB$/i.test(v.lang))
+            || voices.find(v => /^en-US$/i.test(v.lang))
+            || voices.find(v => /^en/i.test(v.lang));
+          if (preferred) {{ utterance.voice = preferred; utterance.lang = preferred.lang; }}
+          else {{ utterance.lang = 'en-IN'; }}
+          utterance.rate = 0.86; utterance.pitch = 1.02;
+          utterance.onstart = () => status.textContent = preferred ? ('Speaking with ' + preferred.name + '…') : 'Speaking with your default device voice…';
           utterance.onend = () => status.textContent='Introduction finished.';
-          utterance.onerror = () => status.textContent='Voice playback was blocked or interrupted.';
+          utterance.onerror = () => status.textContent='Voice playback was blocked or interrupted. Try another browser voice in your device settings.';
           window.speechSynthesis.speak(utterance);
         }});
         stop.addEventListener('click', function(){{ if ('speechSynthesis' in window) window.speechSynthesis.cancel(); status.textContent='Stopped.'; }});
@@ -1607,10 +1637,11 @@ elif page=="Identify a Plant":
                                 health=visual_health_screen(image)
                                 care=care_assessment(image, rows[0][0], health)
                                 st.session_state.analysis={"rows":rows,"label":label,"conf":conf,"score":1.0,"model_note":model_note,"model_error":model_error,"health":health,"care":care,"species_unavailable":False}
-                        else:
+                        elif not reject_object:
                             # BioCLIP could not run. Use the local visual screen only
                             # as a plant-presence fallback; do not claim a species unless
-                            # the user supplied meaningful botanical clues.
+                            # the user supplied meaningful botanical clues. Do not enter
+                            # this branch after the plant-presence gate has rejected an image.
                             local_is_plant,local_score,local_reason,local_features=plant_gate(image)
                             if not local_is_plant:
                                 st.session_state.analysis={"nonplant":True,"reason":local_reason,"score":local_score}
@@ -1624,7 +1655,17 @@ elif page=="Identify a Plant":
                                 st.session_state.analysis={"rows":rows,"label":label,"conf":conf,"score":local_score,"model_note":model_note,"model_error":model_error,"health":health,"care":care,"species_unavailable":(not rows)}
         except Exception as exc:
             st.session_state.analysis=None
-            st.error(f"The selected image could not be read: {type(exc).__name__}. Please choose another JPG or PNG image.")
+            # Distinguish a genuinely invalid image from a processing bug. This avoids
+            # misleading users into repeatedly re-uploading valid photos after a code error.
+            try:
+                Image.open(io.BytesIO(raw)).verify()
+                image_is_readable = True
+            except Exception:
+                image_is_readable = False
+            if image_is_readable:
+                st.error(f"The image was opened, but analysis failed because of an internal processing error ({type(exc).__name__}). Please retry once; if it repeats, report this message to the project maintainer.")
+            else:
+                st.error("This image file could not be decoded. Please upload a standard JPG or PNG photo, or take a new photo with the camera.")
     else:
         st.markdown('<div class="pc-card"><h3>📌 Start here</h3><p>Choose <b>Camera</b> to take a photo or <b>Gallery</b> to upload one. After the image appears, the green <b>ANALYZE IMAGE</b> button will always be available.</p></div>',unsafe_allow_html=True)
 
@@ -1806,7 +1847,7 @@ elif page=="Search":
 elif page=="My Plants":
     st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">❤️ My Plants</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Add your plants directly and create reminders for watering, fertilizer, sunlight, pest checks and other care tasks.</p></div>',unsafe_allow_html=True)
     render_due_reminder_alerts()
-    now=datetime.now()
+    now=india_now_naive()
     st.markdown("### ➕ Add a plant to My Plants")
     add_col1,add_col2=st.columns([2,1])
     with add_col1:
@@ -1854,8 +1895,16 @@ elif page=="My Plants":
                         task=st.selectbox("Task",["Watering","Fertilizer","Pesticide","Weedicide","Sunlight / move plant to light","Rotate plant","Check soil moisture","Pest inspection","Misting / humidity","Pruning","Repotting","Custom"],key=f"task_{p['common_name']}_v7")
                         reminder_date=st.date_input("Date",value=date.today(),key=f"date_{p['common_name']}_v7")
                     with r2:
-                        reminder_time=st.time_input("Time",value=time(8,0),key=f"time_{p['common_name']}_v7")
-                        repeat=st.selectbox("Repeat",["One-time","Daily","Weekly","Every 30 days"],key=f"repeat_{p['common_name']}_v7")
+                        st.markdown("**Time (12-hour clock)**")
+                        th,tm,tp=st.columns([1,1,1])
+                        with th:
+                            reminder_hour=st.selectbox("Hour",list(range(1,13)),index=7,key=f"time_hour_{p['common_name']}_v8")
+                        with tm:
+                            reminder_minute=st.selectbox("Minute",list(range(60)),index=0,format_func=lambda x:f"{x:02d}",key=f"time_minute_{p['common_name']}_v8")
+                        with tp:
+                            reminder_period=st.selectbox("AM / PM",["AM","PM"],index=0,key=f"time_period_{p['common_name']}_v8")
+                        reminder_time=time_from_12h(reminder_hour,reminder_minute,reminder_period)
+                        repeat=st.selectbox("Repeat",["One-time","Daily","Weekly","Every 30 days"],key=f"repeat_{p['common_name']}_v8")
                     custom=st.text_input("Custom task / note",placeholder="e.g. Check for aphids",key=f"custom_{p['common_name']}_v7")
                     notes=st.text_input("Notes (optional)",placeholder="e.g. Move near a bright window",key=f"notes_{p['common_name']}_v7")
                     if st.form_submit_button("➕ Add reminder",type="primary",width="stretch"):
