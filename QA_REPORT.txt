@@ -1,28 +1,32 @@
-PlantCare AI — QA and limitations report
+PlantCare AI — QA and Fix Report
 
-Build: GitHub-ready update with spoken introduction and Care Confidence Passport.
+Competition patch summary
+1. Fixed a false-rejection risk in the offline plant-presence fallback: it now accepts multiple plant-like patterns, including green foliage, flower-heavy yellow/red images, and mixed foliage/flower images. Color is used only for plant-presence screening, never to name a species.
+2. Relaxed the photo-quality minimum slightly so usable close-ups are less likely to be rejected prematurely.
+3. Made text/document rejection more conservative. A high local document score alone no longer rejects an image; stronger text-vs-plant model evidence is required. The independent general-object screen remains in place to reject obvious cars and other non-plant objects when its model is available.
+4. Removed the spoken Home-page introduction entirely. Written creator credits elsewhere remain unchanged.
+5. Added Plant Look-Alike Showdown: a single-session comparison of the top model candidates using the plant library's stored leaf, flower, growth and identification descriptions. These descriptions are explicitly labelled as reference traits, not proof that each trait was seen in the uploaded image.
+6. Updated README to match the current build.
 
-Checks performed for this package:
-- ZIP archive integrity: checked 20 times; no corrupt member detected.
-- Python syntax: app.py compiled successfully with py_compile and parsed with ast.parse.
-- Plant database: JSON parsed successfully; 56 unique common_name entries; required fields checked.
-- Required files: app.py, plant_data.json, requirements.txt, README.txt, MODEL_NOTES.txt and .streamlit/config.toml are present.
-- Feature wiring: checked for camera upload, gallery upload, visual health screening, care guidance, spoken Home introduction, and Care Confidence Passport text.
-- Package manifest: all expected files included; no duplicate archive paths.
+Checks performed on this package
+- Python syntax compilation: passed.
+- AST parsing: passed.
+- plant_data.json: parsed successfully; plant records checked for common names and expected structure.
+- Static checks: spoken introduction widget removed; Plant Look-Alike Showdown present; fallback and rejection threshold edits present.
+- ZIP integrity: checked after packaging.
 
-IMPORTANT LIMITATIONS:
-- These are static/package checks, not proof that the hosted website has zero runtime errors.
-- A full Streamlit browser launch and BioCLIP/OpenCLIP model-download test were not possible in the audit environment because Streamlit/OpenCLIP were unavailable there.
-- No labelled test dataset covering all 56 species was supplied. Species identification accuracy for every species is therefore NOT verified and must not be advertised as perfect.
-- The confidence band is a visual-match score, not a calibrated probability.
-- The health screen estimates colour patterns in an image. It is not leaf segmentation validated against horticultural ground truth and cannot diagnose a specific disease.
-- A photo cannot directly measure soil moisture, fertilizer/nutrient levels, root health, exact sunlight exposure, or pathogen identity. The app presents species-profile care guidance and asks the user to physically verify these factors.
-- The spoken introduction uses browser SpeechSynthesis; availability and voice quality depend on the browser/device, and the visitor must click Play.
-- My Plants/reminders remain session-based in this app; they may not persist after a session ends.
+Not verified in this environment
+- A live Streamlit browser session was not launched here.
+- The BioCLIP and MobileNet model downloads/inference were not run end-to-end in this check.
+- No guarantee is made that every plant image will be identified correctly. The specific car, marigold and tulsi images should be tested on the deployed app before the competition.
+- A single photo cannot establish a definitive disease diagnosis or directly measure soil moisture, nutrient levels, root health or sunlight exposure.
 
-Recommended release validation:
-1. Deploy to Streamlit Community Cloud and inspect logs.
-2. Test camera and gallery with clear photos of each of the 56 supported species, including look-alikes and different lighting.
-3. Test non-plant photos (phone, book, mug, person, sky) and low-quality/ambiguous images.
-4. Verify voice playback in Chrome and at least one mobile browser.
-5. Compare visual health alerts with human inspection before relying on them.
+Competition test checklist
+- Test a clear car photo: it should be rejected as non-plant.
+- Test a clear marigold photo: it should proceed to plant matching rather than be rejected only because the photo is flower-heavy.
+- Test a clear tulsi photo: it should proceed to plant matching.
+- Test one non-plant object and one blurry/dark plant photo.
+- If model loading fails, check the visible error and use only the explicitly labelled fallback; do not claim full AI identification when BioCLIP is unavailable.
+
+Conclusion
+This patch reduces known false-rejection risks and adds a one-session look-alike comparison. It is statically checked, but it is not certified perfect; deploy and run the listed photo tests before the live judging session.
