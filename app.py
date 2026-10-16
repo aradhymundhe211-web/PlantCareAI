@@ -32,8 +32,8 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    :root{--g:#138a4b;--gd:#0b6b39;--gm:#eaf8ef;--ink:#173225;--muted:#526b5d;--line:#d2e5d7;--bg:#f5faf6;--white:#fff;--lime:#f0f7b5}
-    .stApp{background:linear-gradient(180deg,#f4faf5 0,#fff 46%);color:var(--ink);font-size:1.08rem}
+    :root{--g:#168044;--gd:#075b35;--gm:#edf6df;--ink:#092f24;--muted:#405e50;--line:#d7e5c5;--bg:#fbfaed;--white:#fffef7;--lime:#dff39c}
+    .stApp{background:linear-gradient(180deg,#f5f8e9 0,#fffdf1 48%);color:var(--ink);font-size:1.15rem}
     .stMarkdown p,.stMarkdown li{font-size:1.04rem;line-height:1.68}
     .stMarkdown h1{font-size:2.55rem!important;letter-spacing:-.025em}
     .stMarkdown h2{font-size:2rem!important}
@@ -41,7 +41,15 @@ st.markdown(
     label,[data-testid="stWidgetLabel"] p{font-size:1rem!important;font-weight:700!important}
     .stCaption,[data-testid="stCaptionContainer"]{font-size:.9rem!important}
     [data-testid="stHeader"]{background:rgba(255,255,255,.94)}
-    [data-testid="stSidebar"]{background:linear-gradient(180deg,#effaf3 0,#f8fcf9 100%);border-right:1px solid var(--line)}
+    [data-testid="stSidebar"]{background:linear-gradient(180deg,#003c2d 0%,#002f24 100%)!important;border-right:1px solid #164f3c!important}
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] span,
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] div,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] *{color:#f5fff7!important}
+    [data-testid="stSidebar"] button{background:transparent!important;border:1px solid transparent!important;color:#f5fff7!important;border-radius:12px!important;min-height:46px!important}
+    [data-testid="stSidebar"] button:hover{background:#0a6345!important;border-color:#31825e!important}
+    [data-testid="stSidebar"] button[kind="primary"]{background:#0b754b!important;color:#fff!important}
     [data-testid="stSidebar"] *{color:var(--ink)}
     .pc-brand{display:flex;align-items:center;gap:12px;padding:6px 4px 22px}
     .pc-logo{width:58px;height:58px;border-radius:19px;background:linear-gradient(145deg,#e8f7b9,#f8ffe8);border:1px solid #c6e49a;display:flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 8px 20px rgba(10,106,57,.14)}
@@ -72,6 +80,26 @@ st.markdown(
     [data-testid="stCameraInput"] button, [data-testid="stCameraInput"] button *{background:#138a4b!important;color:#fff!important;border:0!important;border-radius:12px!important}
     [data-testid="stCameraInput"] input{background:#fff!important;color:#173225!important}
     [data-testid="stTabs"] button{background:#fff!important;color:#173225!important;border-radius:12px 12px 0 0!important}
+    /* Accessibility pass: consistently readable text, controls and tabs */
+    .stApp, .stApp p, .stApp li, .stApp label,
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stWidgetLabel"] p,
+    [data-testid="stCaptionContainer"],
+    [data-testid="stFileUploaderDropzone"] span {font-size:1.08rem!important;line-height:1.55!important}
+    .stApp h1{font-size:clamp(2.15rem,3vw,3.1rem)!important}
+    .stApp h2{font-size:clamp(1.75rem,2.4vw,2.35rem)!important}
+    .stApp h3{font-size:clamp(1.35rem,1.7vw,1.7rem)!important}
+    [data-testid="stTabs"] button{font-size:1.12rem!important;font-weight:800!important;padding:14px 20px!important;min-height:54px!important}
+    .stButton>button{font-size:1.08rem!important;min-height:52px!important;padding:.7rem 1.1rem!important}
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+    [data-testid="stSidebar"] button{font-size:1.02rem!important;line-height:1.4!important}
+    .pc-card{padding:24px!important;border-radius:20px!important}
+    .pc-card h3{font-size:1.35rem!important}
+    .pc-card p{font-size:1.08rem!important;line-height:1.65!important}
+    .pc-home-stat .label,.pc-mini span,.pc-safety,.pc-upload-sub{font-size:1rem!important;line-height:1.5!important}
+    .pc-title{font-size:1.9rem!important}
+    @media(max-width:900px){.pc-home-hero{padding:24px!important;min-height:240px!important}.pc-home-hero h1{font-size:2.25rem!important}.pc-pills{gap:8px}.pc-pill{font-size:.95rem!important}}
+
     [data-testid="stTabs"] button[aria-selected="true"]{color:#0b6b39!important;border-bottom-color:#138a4b!important}
     div[data-testid="stMetric"]{background:#fff;border:1px solid var(--line);border-radius:14px}
 
@@ -109,7 +137,7 @@ st.markdown(
     .pc-home-stat .symbol{font-size:2rem;line-height:1.1;margin-bottom:7px}
     .pc-home-stat .value{font-size:1.75rem;font-weight:950;color:#086b3d;line-height:1.2}
     .pc-home-stat .label{font-size:.95rem;color:#174634;font-weight:750;margin-top:4px}
-    .pc-home-hero{position:relative;overflow:hidden;color:#fff;border-radius:25px;padding:32px 34px;margin-bottom:22px;min-height:260px;background:linear-gradient(90deg,rgba(0,58,36,.95) 0%,rgba(0,87,47,.84) 44%,rgba(0,80,42,.18) 100%),url('https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=1800&q=85') center 48%/cover no-repeat;box-shadow:0 18px 40px rgba(9,70,39,.18)}
+    .pc-home-hero{position:relative;overflow:hidden;color:#fff;border-radius:25px;padding:32px 34px;margin-bottom:22px;min-height:260px;background:linear-gradient(90deg,rgba(0,54,36,.96) 0%,rgba(0,84,49,.84) 43%,rgba(0,70,39,.18) 100%),url('https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=1800&q=85') center 48%/cover no-repeat;box-shadow:0 18px 40px rgba(9,70,39,.18)}
     .pc-home-hero h1{font-size:clamp(2.6rem,4.4vw,3.8rem)!important;line-height:1.02!important;margin:0!important;color:#fff!important;letter-spacing:-.035em}
     .pc-home-hero .tagline{font-size:1.22rem;font-weight:700;color:#e4f5ba;margin-top:7px}
     .pc-home-hero .copy{font-size:1.13rem;max-width:660px;color:#fff;margin-top:14px;line-height:1.55}
@@ -120,6 +148,238 @@ st.markdown(
     .pc-home-hero .pc-pill{background:rgba(255,255,255,.17);border-color:rgba(255,255,255,.4)}
     .pc-journey .pc-mini{min-height:140px}
     @media(max-width:900px){.pc-home-hero{padding:24px 20px;min-height:230px}.pc-home-hero h1{font-size:2.5rem!important}.stMarkdown p,.stMarkdown li{font-size:1.02rem!important}}
+
+
+
+    /* Accessibility pass: larger text, navigation, tabs, and card spacing */
+    html, body, [class*="css"], .stApp { font-size: 19px !important; }
+    .stMarkdown p, .stMarkdown li, .stText, .stWrite, [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li { font-size: 1.12rem !important; line-height: 1.72 !important; }
+    .stCaption, [data-testid="stCaptionContainer"], small { font-size: 1rem !important; line-height: 1.55 !important; }
+    .stMarkdown h1, h1 { font-size: 2.8rem !important; line-height: 1.12 !important; }
+    .stMarkdown h2, h2 { font-size: 2.25rem !important; line-height: 1.18 !important; }
+    .stMarkdown h3, h3 { font-size: 1.65rem !important; line-height: 1.25 !important; }
+    label, [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] { font-size: 1.12rem !important; line-height: 1.4 !important; font-weight: 750 !important; }
+    input, textarea, [data-baseweb="select"], [data-baseweb="input"] { font-size: 1.12rem !important; min-height: 48px !important; }
+    [data-testid="stTabs"] [role="tablist"] { gap: 10px !important; }
+    [data-testid="stTabs"] button, [data-baseweb="tab"] { font-size: 1.14rem !important; font-weight: 800 !important; min-height: 54px !important; padding: 13px 20px !important; }
+    .stButton > button, [data-testid="stDownloadButton"] button, [data-testid="stFormSubmitButton"] button { font-size: 1.12rem !important; min-height: 54px !important; padding: 12px 18px !important; line-height: 1.3 !important; }
+    [data-testid="stSidebar"] { min-width: 250px !important; }
+    [data-testid="stSidebar"] .stButton > button { font-size: 1.08rem !important; min-height: 52px !important; padding: 12px 15px !important; }
+    [data-testid="stSidebar"] .pc-brand-title { font-size: 1.5rem !important; }
+    [data-testid="stSidebar"] .pc-brand-sub { font-size: 1rem !important; }
+    .pc-card, .pc-mini, .pc-stat, .pc-result, .pc-featured { padding: 24px !important; }
+    .pc-card h3, .pc-featured-body h3 { font-size: 1.45rem !important; line-height: 1.3 !important; }
+    .pc-card p, .pc-featured-body p { font-size: 1.1rem !important; line-height: 1.65 !important; }
+    .pc-title { font-size: 1.95rem !important; line-height: 1.25 !important; }
+    .pc-stat-num { font-size: 2.25rem !important; }
+    .pc-stat-label, .pc-mini span, .pc-home-stat .label { font-size: 1.04rem !important; line-height: 1.45 !important; }
+    .pc-mini b { font-size: 1.4rem !important; }
+    .pc-pill, .pc-badge, .pc-check { font-size: 1rem !important; padding: 9px 14px !important; }
+    .pc-page-byline { font-size: .98rem !important; }
+    .pc-home-hero .eyebrow { font-size: 1.04rem !important; }
+    .pc-home-hero .tagline { font-size: 1.35rem !important; }
+    .pc-home-hero .copy { font-size: 1.22rem !important; }
+    .pc-result-name { font-size: clamp(1.9rem, 3vw, 2.55rem) !important; }
+    .pc-scientific, .pc-library-count, .pc-safety, .pc-upload-sub, .pc-analyze-box span { font-size: 1rem !important; line-height: 1.55 !important; }
+    .stExpander details summary { font-size: 1.12rem !important; min-height: 54px !important; }
+    [data-testid="stDataFrame"] * { font-size: 1rem !important; }
+    @media (max-width: 900px) {
+      html, body, [class*="css"], .stApp { font-size: 18px !important; }
+      .stMarkdown p, .stMarkdown li { font-size: 1.06rem !important; }
+      .stMarkdown h1, h1 { font-size: 2.25rem !important; }
+      .stMarkdown h2, h2 { font-size: 1.9rem !important; }
+      .stMarkdown h3, h3 { font-size: 1.45rem !important; }
+      [data-testid="stTabs"] button, [data-baseweb="tab"] { padding: 11px 12px !important; font-size: 1rem !important; }
+      .pc-card, .pc-mini, .pc-stat, .pc-result { padding: 18px !important; }
+    }
+
+
+
+    /* Final readability and reference-layout pass: larger type, stronger contrast,
+       spacious controls, and consistent plant-card geometry. */
+    :root {
+      --pc-forest: #003b2b;
+      --pc-deep: #002f23;
+      --pc-green: #137b43;
+      --pc-leaf: #dcefb7;
+      --pc-cream: #fbfaed;
+      --pc-ink: #082f25;
+      --pc-muted: #35594a;
+      --pc-border: #d5e4c8;
+    }
+    .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"] {
+      color: var(--pc-ink) !important;
+      font-size: 20px !important;
+    }
+    [data-testid="stMain"] .block-container {
+      max-width: 1600px !important;
+      padding-top: 2rem !important;
+      padding-bottom: 2.5rem !important;
+      padding-left: clamp(1.25rem, 3vw, 3rem) !important;
+      padding-right: clamp(1.25rem, 3vw, 3rem) !important;
+    }
+    .stMarkdown p, .stMarkdown li,
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li,
+    [data-testid="stText"] {
+      font-size: 1.15rem !important;
+      line-height: 1.7 !important;
+      color: var(--pc-ink);
+    }
+    .stMarkdown h1, [data-testid="stMarkdownContainer"] h1, h1 {
+      font-size: clamp(2.45rem, 3.2vw, 3.35rem) !important;
+      line-height: 1.12 !important;
+      font-weight: 900 !important;
+      letter-spacing: -.025em !important;
+    }
+    .stMarkdown h2, [data-testid="stMarkdownContainer"] h2, h2 {
+      font-size: clamp(1.9rem, 2.2vw, 2.35rem) !important;
+      line-height: 1.2 !important;
+      font-weight: 900 !important;
+    }
+    .stMarkdown h3, [data-testid="stMarkdownContainer"] h3, h3 {
+      font-size: clamp(1.45rem, 1.7vw, 1.75rem) !important;
+      line-height: 1.3 !important;
+      font-weight: 850 !important;
+    }
+    .stCaption, [data-testid="stCaptionContainer"],
+    [data-testid="stCaptionContainer"] *, small {
+      font-size: 1rem !important;
+      line-height: 1.55 !important;
+      color: var(--pc-muted) !important;
+    }
+    label, [data-testid="stWidgetLabel"],
+    [data-testid="stWidgetLabel"] p,
+    [data-testid="stWidgetLabel"] label {
+      font-size: 1.12rem !important;
+      line-height: 1.45 !important;
+      font-weight: 800 !important;
+      color: var(--pc-ink) !important;
+    }
+    input, textarea, [data-baseweb="input"] input,
+    [data-baseweb="select"] *, [data-baseweb="textarea"] textarea {
+      font-size: 1.1rem !important;
+      line-height: 1.45 !important;
+    }
+    input, textarea, [data-baseweb="input"] > div,
+    [data-baseweb="select"] > div {
+      min-height: 50px !important;
+    }
+    .stButton > button,
+    [data-testid="stDownloadButton"] button,
+    [data-testid="stFormSubmitButton"] button,
+    [data-testid="stFileUploader"] button,
+    [data-testid="stCameraInput"] button {
+      min-height: 54px !important;
+      padding: 12px 19px !important;
+      font-size: 1.08rem !important;
+      line-height: 1.35 !important;
+      font-weight: 800 !important;
+      border-radius: 14px !important;
+    }
+    [data-testid="stTabs"] [role="tablist"] {
+      gap: 10px !important;
+      border-bottom: 1px solid var(--pc-border) !important;
+      align-items: stretch !important;
+    }
+    [data-testid="stTabs"] button[role="tab"],
+    [data-baseweb="tab"] {
+      min-height: 58px !important;
+      padding: 14px 22px !important;
+      font-size: 1.12rem !important;
+      font-weight: 850 !important;
+      border-radius: 14px 14px 0 0 !important;
+      white-space: normal !important;
+    }
+    [data-testid="stTabs"] button[role="tab"] p {
+      font-size: 1.1rem !important;
+      font-weight: 850 !important;
+    }
+    [data-testid="stSidebar"] {
+      min-width: 245px !important;
+      background: linear-gradient(180deg, var(--pc-forest) 0%, var(--pc-deep) 100%) !important;
+      border-right: 0 !important;
+    }
+    [data-testid="stSidebar"] * {
+      color: #f4fff7 !important;
+    }
+    [data-testid="stSidebar"] .pc-brand-title {
+      font-size: 1.48rem !important;
+      line-height: 1.25 !important;
+    }
+    [data-testid="stSidebar"] .pc-brand-sub {
+      font-size: 1rem !important;
+      line-height: 1.45 !important;
+    }
+    [data-testid="stSidebar"] .pc-nav-title {
+      font-size: .86rem !important;
+      letter-spacing: .1em !important;
+    }
+    [data-testid="stSidebar"] .stButton > button {
+      width: 100% !important;
+      min-height: 52px !important;
+      padding: 12px 14px !important;
+      font-size: 1.05rem !important;
+      text-align: left !important;
+      border-radius: 13px !important;
+    }
+    .pc-home-hero {
+      min-height: 285px !important;
+      padding: clamp(26px, 3vw, 42px) !important;
+      border-radius: 25px !important;
+      background-position: center 48% !important;
+    }
+    .pc-home-hero h1 {
+      font-size: clamp(2.7rem, 4.3vw, 4rem) !important;
+      line-height: 1.05 !important;
+    }
+    .pc-home-hero .eyebrow { font-size: 1rem !important; }
+    .pc-home-hero .tagline { font-size: 1.35rem !important; line-height: 1.45 !important; }
+    .pc-home-hero .copy { font-size: 1.2rem !important; line-height: 1.65 !important; }
+    .pc-hero { padding: 30px !important; border-radius: 24px !important; }
+    .pc-hero p { font-size: 1.18rem !important; line-height: 1.7 !important; }
+    .pc-card, .pc-mini, .pc-stat, .pc-result, .pc-featured {
+      border-radius: 19px !important;
+      padding: 23px !important;
+      border-color: var(--pc-border) !important;
+    }
+    .pc-card h3, .pc-featured-body h3 { font-size: 1.42rem !important; line-height: 1.35 !important; }
+    .pc-card p, .pc-featured-body p { font-size: 1.08rem !important; line-height: 1.65 !important; }
+    .pc-title { font-size: 1.9rem !important; line-height: 1.3 !important; margin-top: 28px !important; }
+    .pc-stat-num { font-size: 2.25rem !important; line-height: 1.15 !important; }
+    .pc-stat-label, .pc-home-stat .label, .pc-mini span { font-size: 1.02rem !important; line-height: 1.5 !important; }
+    .pc-mini b { font-size: 1.35rem !important; }
+    .pc-pill, .pc-badge, .pc-check { font-size: .98rem !important; line-height: 1.35 !important; padding: 9px 13px !important; }
+    .pc-result-name { font-size: clamp(1.9rem, 3vw, 2.6rem) !important; }
+    .pc-scientific, .pc-library-count, .pc-safety, .pc-upload-sub,
+    .pc-analyze-box span, .pc-photo-placeholder span { font-size: 1rem !important; line-height: 1.55 !important; }
+    .stExpander details summary, [data-testid="stExpander"] summary {
+      min-height: 54px !important;
+      font-size: 1.1rem !important;
+      font-weight: 800 !important;
+    }
+    [data-testid="stMetric"] label, [data-testid="stMetricValue"],
+    [data-testid="stMetricDelta"] { font-size: 1.08rem !important; }
+    [data-testid="stFileUploaderDropzone"] { min-height: 130px !important; }
+    [data-testid="stFileUploaderDropzone"] * { font-size: 1.05rem !important; }
+    [data-testid="stDataFrame"] * { font-size: 1rem !important; }
+    .pc-footer { font-size: .95rem !important; line-height: 1.5 !important; }
+    @media (max-width: 900px) {
+      [data-testid="stMain"] .block-container { padding: 1.1rem 1rem 2rem !important; }
+      .stMarkdown p, .stMarkdown li, [data-testid="stMarkdownContainer"] p,
+      [data-testid="stMarkdownContainer"] li { font-size: 1.06rem !important; }
+      .stMarkdown h1, h1 { font-size: 2.25rem !important; }
+      .stMarkdown h2, h2 { font-size: 1.8rem !important; }
+      .stMarkdown h3, h3 { font-size: 1.4rem !important; }
+      [data-testid="stTabs"] button[role="tab"], [data-baseweb="tab"] {
+        min-height: 50px !important; padding: 10px 12px !important; font-size: 1rem !important;
+      }
+      .pc-card, .pc-mini, .pc-stat, .pc-result, .pc-featured { padding: 17px !important; }
+      .pc-home-hero { min-height: 245px !important; }
+    }
 
     </style>
     """,
@@ -1106,7 +1366,7 @@ if page=="Home":
 # Identify
 # -----------------------------------------------------------------------------
 elif page=="Identify a Plant":
-    st.markdown('<div class="pc-hero" style="padding:27px 30px;background:linear-gradient(110deg,#f6f8e8,#e6f1d9)!important;color:#063b2b!important"><h1 style="font-size:2.45rem;color:#063b2b!important">🌿 Identify a Plant</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Take a photo or choose one from your gallery. PlantCare AI first checks whether the image actually contains a plant, then performs species matching. It will refuse a guess when the evidence is weak.</p><div class="pc-pills"><span class="pc-pill">🛡️ Non-plant gate</span><span class="pc-pill">🧠 Multi-view vision</span><span class="pc-pill">🌿 56-plant library</span><span class="pc-pill">⚠️ No forced guess</span></div></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-hero" style="padding:27px 30px;background:linear-gradient(110deg,#f7f7e8,#e3efd4)!important;color:#063b2b!important"><h1 style="font-size:2.45rem;color:#063b2b!important">🌿 Identify a Plant</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Take a photo or choose one from your gallery. PlantCare AI first checks whether the image actually contains a plant, then performs species matching. It will refuse a guess when the evidence is weak.</p><div class="pc-pills"><span class="pc-pill">🛡️ Non-plant gate</span><span class="pc-pill">🧠 Multi-view vision</span><span class="pc-pill">🌿 56-plant library</span><span class="pc-pill">⚠️ No forced guess</span></div></div>',unsafe_allow_html=True)
 
     if "selected_image_bytes" not in st.session_state:
         st.session_state.selected_image_bytes = None
@@ -1344,7 +1604,7 @@ elif page=="Plant Library":
                 st.markdown('</div>',unsafe_allow_html=True)
 
 elif page=="Search":
-    st.markdown('<div class="pc-hero" style="padding:27px 30px;background:linear-gradient(110deg,#f6f8e8,#e6f1d9)!important;color:#063b2b!important"><h1 style="font-size:2.45rem;color:#063b2b!important">🔎 Search Plants</h1><p>Start typing and choose a suggested plant, or search by common name, scientific name or category.</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-hero" style="padding:27px 30px;background:linear-gradient(110deg,#f7f7e8,#e3efd4)!important;color:#063b2b!important"><h1 style="font-size:2.45rem;color:#063b2b!important">🔎 Search Plants</h1><p>Start typing and choose a suggested plant, or search by common name, scientific name or category.</p></div>',unsafe_allow_html=True)
     if "search_q" not in st.session_state: st.session_state.search_q=""
     q=st.text_input("Search plants",value=st.session_state.search_q,placeholder="Type mango, tulsi, rose…",key="search_box_v7")
     st.session_state.search_q=q; ql=q.strip().lower()
