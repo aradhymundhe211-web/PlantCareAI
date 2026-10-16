@@ -496,6 +496,109 @@ st.markdown(
       .pc-library-banner-leaves {display:none}.pc-card,.pc-mini,.pc-stat {padding:16px!important}
     }
 
+
+
+    /* FINAL REFERENCE UI PASS — larger and more legible across every page */
+    html { font-size: 18px !important; }
+    body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+      font-size: 19px !important;
+      color: #073b2b !important;
+    }
+    [data-testid="stMain"] .block-container {
+      max-width: 1720px !important;
+      padding-top: 1.5rem !important;
+      padding-bottom: 2.5rem !important;
+    }
+    .stMarkdown p, .stMarkdown li, [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li, .pc-card p, .pc-mini span,
+    .pc-featured-body p, .pc-quick-copy span, .pc-upload-sub,
+    .pc-safety, .pc-info, .pc-warning, .pc-error {
+      font-size: 1.12rem !important;
+      line-height: 1.65 !important;
+    }
+    .stMarkdown h1, [data-testid="stMarkdownContainer"] h1, h1 {
+      font-size: clamp(2.4rem, 3.4vw, 3.4rem) !important;
+      line-height: 1.12 !important; font-weight: 900 !important;
+    }
+    .stMarkdown h2, [data-testid="stMarkdownContainer"] h2, h2 {
+      font-size: clamp(1.9rem, 2.5vw, 2.5rem) !important;
+      line-height: 1.2 !important; font-weight: 900 !important;
+    }
+    .stMarkdown h3, [data-testid="stMarkdownContainer"] h3, h3 {
+      font-size: clamp(1.45rem, 1.8vw, 1.8rem) !important;
+      line-height: 1.28 !important; font-weight: 850 !important;
+    }
+    label, [data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p,
+    [data-testid="stCaptionContainer"], .stCaption {
+      font-size: 1.08rem !important; line-height: 1.45 !important;
+    }
+    input, textarea, [data-baseweb="select"], [data-baseweb="input"] {
+      font-size: 1.12rem !important; min-height: 52px !important;
+    }
+    [data-testid="stTabs"] [role="tablist"] { gap: 12px !important; }
+    [data-testid="stTabs"] button, [data-baseweb="tab"] {
+      font-size: 1.14rem !important; font-weight: 850 !important;
+      min-height: 58px !important; padding: 14px 22px !important;
+    }
+    .stButton > button, [data-testid="stDownloadButton"] button,
+    [data-testid="stFormSubmitButton"] button {
+      font-size: 1.12rem !important; font-weight: 850 !important;
+      min-height: 56px !important; padding: 12px 20px !important;
+      border-radius: 15px !important;
+    }
+    [data-testid="stSidebar"] { min-width: 260px !important; }
+    [data-testid="stSidebar"] .stButton > button {
+      font-size: 1.08rem !important; min-height: 54px !important;
+      padding: 13px 16px !important; text-align: left !important;
+    }
+    [data-testid="stSidebar"] .pc-brand-title { font-size: 1.45rem !important; }
+    [data-testid="stSidebar"] .pc-brand-sub { font-size: 1rem !important; }
+    .pc-home-hero { min-height: 290px !important; padding: 38px 40px !important; }
+    .pc-home-hero h1 { font-size: clamp(2.8rem, 4vw, 4rem) !important; }
+    .pc-home-hero .tagline { font-size: 1.38rem !important; }
+    .pc-home-hero .copy { font-size: 1.2rem !important; line-height: 1.6 !important; }
+    .pc-home-hero .eyebrow { font-size: 1rem !important; }
+    .pc-home-stat { min-height: 112px !important; padding: 20px 14px !important; }
+    .pc-home-stat .symbol { font-size: 2.35rem !important; }
+    .pc-home-stat .value { font-size: 2rem !important; }
+    .pc-home-stat .label { font-size: 1.05rem !important; }
+    .pc-title { font-size: 2rem !important; margin-top: 30px !important; }
+    .pc-card, .pc-mini, .pc-stat, .pc-result, .pc-featured {
+      border-radius: 20px !important; padding: 24px !important;
+      box-shadow: 0 8px 24px rgba(17,65,38,.07) !important;
+    }
+    .pc-card h3, .pc-featured-body h3 { font-size: 1.45rem !important; }
+    .pc-mini b { font-size: 1.35rem !important; }
+    .pc-mini { min-height: 150px !important; }
+    .pc-stat-num, .pc-result-name { font-size: 2.2rem !important; }
+    .pc-stat-label, .pc-library-count, .pc-scientific { font-size: 1.04rem !important; }
+    .pc-pills { gap: 10px !important; }
+    .pc-pill, .pc-badge, .pc-check { font-size: 1.02rem !important; padding: 10px 15px !important; }
+    .pc-page-heading { gap: 18px !important; margin-bottom: 22px !important; }
+    .pc-heading-emoji { font-size: 3rem !important; }
+    .pc-page-heading p { font-size: 1.12rem !important; }
+    .pc-library-banner { min-height: 175px !important; padding: 26px !important; }
+    .pc-library-banner-copy h2 { font-size: 1.9rem !important; }
+    .pc-library-banner-copy p { font-size: 1.12rem !important; }
+    .pc-upload-card { min-height: 220px !important; padding: 24px !important; }
+    .pc-upload-art { font-size: 3.2rem !important; }
+    .pc-upload-title { font-size: 1.5rem !important; }
+    .pc-category-chips span { font-size: 1.02rem !important; padding: 10px 15px !important; }
+    .pc-quick-copy b { font-size: 1.2rem !important; }
+    .pc-quick-copy span { font-size: 1rem !important; }
+    .pc-about-brand h2 { font-size: 2.5rem !important; }
+    .pc-about-logo { font-size: 4rem !important; }
+    .pc-footer { font-size: .95rem !important; }
+    @media (max-width: 900px) {
+      html { font-size: 16px !important; }
+      [data-testid="stMain"] .block-container { padding-left: 1rem !important; padding-right: 1rem !important; }
+      .pc-home-hero { padding: 25px 20px !important; min-height: 250px !important; }
+      .pc-home-hero h1 { font-size: 2.35rem !important; }
+      .stMarkdown p, .stMarkdown li { font-size: 1.05rem !important; }
+      [data-testid="stTabs"] button, [data-baseweb="tab"] { padding: 11px 12px !important; font-size: 1rem !important; }
+      .pc-card, .pc-mini, .pc-stat, .pc-result, .pc-featured { padding: 18px !important; }
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
