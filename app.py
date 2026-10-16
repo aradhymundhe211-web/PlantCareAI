@@ -417,6 +417,48 @@ if "analysis" not in st.session_state:
     st.session_state.analysis = None
 if "reminders" not in st.session_state:
     st.session_state.reminders = []
+if "notified_reminder_ids" not in st.session_state:
+    st.session_state.notified_reminder_ids = set()
+
+@st.fragment(run_every="10s")
+def render_due_reminder_alerts():
+    """Refresh due reminders while My Plants is open; attempt browser audio/voice."""
+    now_local = datetime.now()
+    due = []
+    for reminder in st.session_state.get("reminders", []):
+        try:
+            due_time = datetime.fromisoformat(reminder["when"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not reminder.get("done") and due_time <= now_local:
+            due.append(reminder)
+    if not due:
+        return
+    st.warning("⏰ Care reminder due: " + " · ".join(f"{r.get('task', 'Care task')} for {r.get('plant', 'your plant')}" for r in due))
+    fresh = [r for r in due if r.get("id") not in st.session_state.notified_reminder_ids]
+    if fresh:
+        for reminder in fresh:
+            st.session_state.notified_reminder_ids.add(reminder.get("id"))
+        announcements = [f"Care reminder. {r.get('task', 'Care task')} for {r.get('plant', 'your plant')}." for r in fresh]
+        payload = json.dumps(announcements).replace("<", "\\u003c")
+        # Browser autoplay rules vary. The visible due alert remains the fallback.
+        st.components.v1.html(f'''<div style="font:16px sans-serif;color:#075b35">🔔 Reminder alert attempted. If your browser blocks automatic audio, click “Speak due reminders”.</div>
+<script>
+(() => {{
+ const lines = {payload};
+ try {{
+   const Ctx = window.AudioContext || window.webkitAudioContext;
+   if (Ctx) {{ const ctx = new Ctx(); let t = ctx.currentTime + 0.05;
+     for (let j=0;j<3;j++) {{ const osc=ctx.createOscillator(); const gain=ctx.createGain(); osc.frequency.value=j===1?880:660; gain.gain.value=0.12; osc.connect(gain); gain.connect(ctx.destination); osc.start(t); osc.stop(t+0.16); t+=0.22; }}
+   }}
+   if ('speechSynthesis' in window) {{ const u=new SpeechSynthesisUtterance(lines.join(' ')); u.rate=0.92; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); }}
+ }} catch(e) {{}}
+}})();
+</script>''', height=52)
+    if st.button("🔊 Speak due reminders", key="speak_due_reminders"):
+        lines = [f"Care reminder. {r.get('task', 'Care task')} for {r.get('plant', 'your plant')}." for r in due]
+        payload = json.dumps(lines).replace("<", "\\u003c")
+        st.components.v1.html(f'''<script>try {{ if ('speechSynthesis' in window) {{ const u=new SpeechSynthesisUtterance({payload}.join(' ')); u.rate=.92; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); }} }} catch(e) {{}}</script>''', height=1)
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -556,6 +598,12 @@ def bioclip_gate_text_features():
         "a photograph of a building",
         "a photograph of an electronic device",
         "a photograph of a household object",
+        "a photograph of a book, notebook, paper or printed page",
+        "a photograph of a pen, pencil, eraser or ruler",
+        "a photograph of a door, window, wall or glass pane",
+        "a photograph of a box, carton, package or container",
+        "a photograph of a person, face or human body",
+        "a photograph of a car, motorcycle, bicycle or scooter",
         "a photograph of pavement, floor or road",
     ]
     groups=[]
@@ -792,7 +840,10 @@ def general_object_screen(img_bytes: bytes):
             "cellular telephone","telephone","camera","microphone","refrigerator","washer","vacuum",
             "radio","printer","book","notebook","envelope","building","streetcar","street sign",
             "traffic light","parking meter","fire engine","ambulance","police van","school bus","desktop computer",
-            "desk","chair","table","bottle","cup","mug","backpack","shoe","clock","watch","car wheel"
+            "desk","chair","table","bottle","cup","mug","backpack","shoe","clock","watch","car wheel",
+            "pencil","pen","ballpoint","fountain pen","ruler","eraser","book jacket","binder",
+            "window shade","window screen","screen door","door","window","glass","vase","plate",
+            "scissors","stapler","paper towel","toilet tissue","box","carton","packet"
         )
         plant_terms=(
             "plant","tree","flower","daisy","rose","sunflower","leaf","cucumber","zucchini","corn",
@@ -819,9 +870,11 @@ def general_object_screen(img_bytes: bytes):
         reason=f"General vision screening recognized a non-plant object ({top1})." if reject else ""
         return reject,reason,{"top":top,"top1":top1,"top1_score":top1_score,"hard_hits":hard_hits,"plant_hits":plant_hits,"hard_max":hard_max,"plant_max":plant_max}
     except Exception as exc:
-        # Safety rule: if the independent object gate cannot run, do not silently
-        # allow BioCLIP to force an object into a plant species.
-        return True, f"Smart Rejection could not verify the image as a plant ({type(exc).__name__}). Please try Analyze again.", {"error":f"{type(exc).__name__}: {exc}", "gate_unavailable": True}
+        # The general-domain model may fail to download on a fresh/cloud deploy.
+        # Do not label every genuine plant as a non-plant just because this
+        # *optional* gate is unavailable; BioCLIP + the separate conservative
+        # plant-presence gate still get a chance to assess the image.
+        return False, "", {"error":f"{type(exc).__name__}: {exc}", "gate_unavailable": True}
 
 
 def optional_vision_rank(img: Image.Image, filename_hint: str = ""):
@@ -999,8 +1052,11 @@ def visual_health_screen(img: Image.Image) -> dict:
     green=(g>r*.94)&(g>b*1.04)&(g>.14)&(sat>.10)
     yellow=(r>.38)&(g>.32)&(b<.40)&(r>b*1.10)&(sat>.16)
     brown=(r>.20)&(g>.10)&(g<r*.78)&(b<g*.95)&(sat>.16)
-    dark=(mx<.18)&(sat>.05)
-    foliage=green|yellow|brown
+    dark=(mx<.18)
+    # Include saturated dark pixels in the candidate foliage mask. In the old
+    # code dark pixels were excluded from `foliage`, so dark_f was always zero.
+    # This remains a coarse visual screen, not a leaf segmentation or diagnosis.
+    foliage=green|yellow|brown|dark
     area=max(float(foliage.mean()),.001)
     yellow_f=float((yellow&foliage).mean()/area)
     brown_f=float((brown&foliage).mean()/area)
@@ -1011,7 +1067,7 @@ def visual_health_screen(img: Image.Image) -> dict:
     elif yellow_f>=.20:
         status="Possible yellowing / stress signs"; level="Monitor"
     else:
-        status="No obvious visual stress signs detected"; level="Looks generally healthy in this photo"
+        status="No strong colour-stress signal detected in this photo"; level="No obvious visual stress signal"
     return {"status":status,"level":level,"green":green_f,"yellow":yellow_f,"brown":brown_f,"dark":dark_f,"focus_used":focus is not img}
 
 
@@ -1353,18 +1409,80 @@ logo_svg = """<svg viewBox="0 0 64 64" width="64" height="64" role="img" aria-la
 
 if page=="Home":
     st.markdown('''<div class="pc-home-hero"><div class="eyebrow">Smarter care for healthier plants</div><div class="mark"><div class="leaf-icon"></div><div><h1>PlantCare AI</h1><div class="tagline">Healthy Plants&nbsp; 🌿 Greener Tomorrow</div></div></div><div class="copy">Identify a plant, discover its needs, and build better care habits — all in one friendly place.</div><div class="copy" style="font-size:.98rem;margin-top:4px">✨ Made by Aradhy Mundhe</div><div class="pc-pills"><span class="pc-pill">📸 Photo identification</span><span class="pc-pill">🌿 56 plant profiles</span><span class="pc-pill">🛡️ Smart rejection</span><span class="pc-pill">💚 Practical care guidance</span></div></div>''',unsafe_allow_html=True)
+    # Accessible, browser-native spoken introduction. Audio starts only after the
+    # visitor clicks the button inside this component (avoids autoplay blocking).
+    intro_text = (
+        "Welcome to PlantCare AI, created by Aradhy Mundhe. "
+        "This student project helps you explore 56 plant profiles, upload or take a plant photo, "
+        "review possible plant matches, learn sunlight and watering needs, check common pests and diseases, "
+        "and organise plant-care reminders. Our special Care Confidence Passport separates visible photo clues "
+        "from information a photo cannot prove, so we do not pretend to diagnose every disease or measure soil and fertilizer. "
+        "For the best results, use a clear, well-lit photo and confirm important findings with a close inspection. "
+        "Thank you for visiting PlantCare AI. Identify, learn, and care."
+    )
+    intro_json = json.dumps(intro_text).replace("</", "<\\/")
+    st.components.v1.html(f'''
+      <div style="font-family:Arial,sans-serif;border:1px solid #cfe2d5;border-radius:14px;padding:12px 14px;background:#f5fbf5;color:#173225">
+        <div style="font-weight:700;margin-bottom:5px">🔊 Meet PlantCare AI — spoken introduction</div>
+        <div style="font-size:14px;line-height:1.5;margin-bottom:10px">Hear what the app does and who created it.</div>
+        <button id="pc-intro-play" type="button" style="cursor:pointer;border:0;border-radius:10px;padding:10px 15px;background:#0b6b39;color:white;font-weight:700">▶ Play introduction</button>
+        <button id="pc-intro-stop" type="button" style="cursor:pointer;border:1px solid #b9d5c3;border-radius:10px;padding:10px 15px;background:white;color:#173225;font-weight:700;margin-left:6px">■ Stop</button>
+        <span id="pc-intro-status" aria-live="polite" style="font-size:12px;margin-left:8px"></span>
+      </div>
+      <script>
+      (function(){{
+        const text = {intro_json};
+        const play = document.getElementById('pc-intro-play');
+        const stop = document.getElementById('pc-intro-stop');
+        const status = document.getElementById('pc-intro-status');
+        play.addEventListener('click', function(){{
+          if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {{ status.textContent='Voice is not supported by this browser.'; return; }}
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'en-IN'; utterance.rate = 0.92;
+          utterance.onstart = () => status.textContent='Speaking…';
+          utterance.onend = () => status.textContent='Introduction finished.';
+          utterance.onerror = () => status.textContent='Voice playback was blocked or interrupted.';
+          window.speechSynthesis.speak(utterance);
+        }});
+        stop.addEventListener('click', function(){{ if ('speechSynthesis' in window) window.speechSynthesis.cancel(); status.textContent='Stopped.'; }});
+      }})();
+      </script>
+    ''', height=125)
+
     stat_cols=st.columns(4)
     for col,emoji,value,label in zip(stat_cols,["🌱","🎯","💚","🌎"],[str(len(PLANTS)),"AI","Care","Green"],["Plant Species","Photo Identification","Plant Care Support","Greener Future"]):
         with col:
             st.markdown(f'<div class="pc-home-stat"><div class="symbol">{emoji}</div><div class="value">{value}</div><div class="label">{label}</div></div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-title">🌼 Start exploring</div>',unsafe_allow_html=True)
     a,b,c=st.columns(3)
-    for col,title,desc in [(a,"📸 Identify a Plant","Take a photo or upload an image to find a possible plant match, then review its care profile."),(b,"🌳 Explore the Plant Library","Browse plant photos, botanical names, growing conditions, common problems and safety information."),(c,"🪴 My Plants & Reminders","Keep track of your plants and set reminders for watering, sunlight, pruning and other care tasks.")]:
-        with col: st.markdown(f'<div class="pc-card"><h3>{title}</h3><p>{desc}</p></div>',unsafe_allow_html=True)
+    home_destinations=[
+        (a,"📸 Identify a Plant","Take a photo or upload an image to find a possible plant match, then review its care profile.","Identify a Plant","home_identify"),
+        (b,"🌳 Explore the Plant Library","Browse plant photos, botanical names, growing conditions, common problems and safety information.","Plant Library","home_library"),
+        (c,"🪴 My Plants & Reminders","Keep track of your plants and set reminders for watering, sunlight, pruning and other care tasks.","My Plants","home_myplants"),
+    ]
+    for col,title,desc,destination,key in home_destinations:
+        with col:
+            st.markdown(f'<div class="pc-card"><h3>{title}</h3><p>{desc}</p></div>',unsafe_allow_html=True)
+            if st.button("Open →",key=key,width="stretch",type="primary"):
+                st.session_state.page=destination
+                st.session_state.analysis=None
+                st.rerun()
     st.markdown('<div class="pc-title">🌱 Your plant-care journey</div>',unsafe_allow_html=True)
     steps=st.columns(4)
-    for col,emoji,title,desc in zip(steps,["📷","🔎","🌞","🪴"],["Capture","Identify","Learn","Care"],["Choose a clear plant photo.","Review a possible match.","Understand light, water and soil.","Save plants and plan routines."]):
-        with col: st.markdown(f'<div class="pc-mini" style="min-height:145px"><div style="font-size:2rem;margin-bottom:7px">{emoji}</div><b>{title}</b><span>{desc}</span></div>',unsafe_allow_html=True)
+    journey=[
+        (steps[0],"📷","Capture","Choose a clear plant photo.","Identify a Plant","journey_capture"),
+        (steps[1],"🔎","Identify","Review a possible match.","Identify a Plant","journey_identify"),
+        (steps[2],"🌞","Learn","Understand light, water and soil.","Plant Library","journey_learn"),
+        (steps[3],"🪴","Care","Save plants and plan routines.","My Plants","journey_care"),
+    ]
+    for col,emoji,title,desc,destination,key in journey:
+        with col:
+            st.markdown(f'<div class="pc-mini" style="min-height:145px"><div style="font-size:2rem;margin-bottom:7px">{emoji}</div><b>{title}</b><span>{desc}</span></div>',unsafe_allow_html=True)
+            if st.button(f"{title} →",key=key,width="stretch"):
+                st.session_state.page=destination
+                st.session_state.analysis=None
+                st.rerun()
     st.markdown('<div class="pc-info" style="margin-top:18px"><b>🌿 Our approach:</b> Helpful plant information with honest uncertainty. Photo-based suggestions are guidance, not a guaranteed botanical diagnosis.</div>',unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
@@ -1434,19 +1552,22 @@ elif page=="Identify a Plant":
                 else:
                     with st.spinner("Analyzing plant photo… first run may take longer while the vision model loads."):
                         clues=clue_tokens(leaf_shape,leaf_texture,flowers,growth,thorns)
-                        # HARD STAGE 1: independent general-object screening happens
-                        # BEFORE BioCLIP. This prevents a car, person, laptop, etc. from
-                        # ever reaching the 56-class plant species matcher.
+                        # Stage 1: explicitly verify plant presence before ranking the
+                        # image against the 56 library species. Camera and gallery share
+                        # the same normalized image pipeline and decision gate.
                         reject_object=False
                         object_reason=""
                         general_meta={}
                         try:
-                            reject_general,general_reason,general_meta=general_object_screen(raw)
-                            if reject_general:
+                            gate_is_plant, gate_score, gate_reason, gate_meta = vision_gate(image)
+                            general_meta=gate_meta
+                            if not gate_is_plant:
                                 reject_object=True
-                                object_reason=general_reason
-                        except Exception:
-                            pass
+                                object_reason=gate_reason or "Plant not detected with enough confidence"
+                        except Exception as gate_exc:
+                            # Do not silently guess if the gate itself crashes.
+                            reject_object=True
+                            object_reason=f"Plant detection could not be verified ({type(gate_exc).__name__}). Please try again with a clearer photo."
                         if reject_object:
                             st.session_state.analysis={"nonplant":True,"reason":object_reason,"score":0.0}
                         else:
@@ -1509,7 +1630,7 @@ elif page=="Identify a Plant":
 
     result=st.session_state.analysis
     if result and result.get("nonplant"):
-        st.markdown(f'<div class="pc-error"><b>🚫 NO PLANT DETECTED</b><br>{result["reason"]}. Try a photo where the plant fills more of the frame.</div>',unsafe_allow_html=True)
+        st.markdown(f'<div class="pc-error"><b>🚫 NO PLANT DETECTED / PLANT NOT VERIFIED</b><br>{result["reason"]}. Try a clear, well-lit photo of a real plant with leaves, stems or flowers filling most of the frame. Ordinary objects must not be forced into a plant name.</div>',unsafe_allow_html=True)
     elif result and result.get("species_unavailable"):
         st.markdown('<div class="pc-warning"><b>🌱 Plant detected, but species identification is temporarily unavailable.</b><br>No plant name was guessed. Check the internet connection and press <b>ANALYZE IMAGE</b> again, or add the optional leaf/flower clues to get a conservative shortlist.</div>',unsafe_allow_html=True)
         health=result.get("health")
@@ -1564,6 +1685,19 @@ elif page=="Identify a Plant":
             for col,(title,status,detail) in zip(cols, care_cards[start:start+3]):
                 with col:
                     st.markdown(f'<div class="pc-card"><h3>{title}</h3><p><b>{status}</b><br>{detail}</p></div>',unsafe_allow_html=True)
+
+        # Differentiating feature: transparent evidence-vs-unknowns care passport.
+        # It deliberately avoids turning colour heuristics into a disease diagnosis.
+        st.markdown("### 🧭 PlantCare Care Confidence Passport")
+        st.markdown('''
+        <div class="pc-card">
+          <h3>What the photo can tell us — and what it cannot</h3>
+          <p><b>Visible evidence:</b> approximate green, yellow, brown and dark colour patterns in the selected image.</p>
+          <p><b>Care guidance:</b> light, watering, soil, fertilizer and common-problem information from the selected plant profile.</p>
+          <p><b>Not measured by the camera:</b> soil moisture, nutrient levels, root health, exact sunlight exposure, or a confirmed pathogen.</p>
+          <p><b>Next best step:</b> inspect the soil and leaf undersides, take a close-up of any affected area, and compare symptoms before applying fertilizer or treatment.</p>
+        </div>
+        ''', unsafe_allow_html=True)
 
         st.markdown("### 🌱 Species care requirements")
         c1,c2,c3=st.columns(3)
@@ -1671,6 +1805,7 @@ elif page=="Search":
 
 elif page=="My Plants":
     st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">❤️ My Plants</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Add your plants directly and create reminders for watering, fertilizer, sunlight, pest checks and other care tasks.</p></div>',unsafe_allow_html=True)
+    render_due_reminder_alerts()
     now=datetime.now()
     st.markdown("### ➕ Add a plant to My Plants")
     add_col1,add_col2=st.columns([2,1])
@@ -1739,6 +1874,7 @@ elif page=="About":
         st.markdown('<div class="pc-card"><h3>Project Information</h3><p><b>Project Name:</b> PlantCare AI<br><b>Developed by:</b> Aradhy Mundhe<br><b>Technologies:</b> Python, Streamlit, PyTorch, OpenCLIP, BioCLIP<br><b>Total Plant Species:</b> 56<br><b>Deployment:</b> Streamlit Community Cloud<br><b>Live Website:</b> <a href="https://plantcareai-kznq8jblfdsk3u5jvsw9rt.streamlit.app" target="_blank">Open PlantCare AI</a></p></div>',unsafe_allow_html=True)
         st.markdown('<div class="pc-card" style="display:flex;align-items:center;gap:22px;flex-wrap:wrap"><img class="pc-about-qr" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZoAAAGaAQAAAAAefbjOAAAC/klEQVR4nO2cQW7jMAxFP0cCsrSBHKBHka/WI+UG9lFygAHkZQEZfxYUHbuzSlvYqU0vhLj2QySEIPlJqUI8fQ1/nmcAhxxyyCGHHHLomJDUK0K6UUSkBUTaSUTaSYDRXuh2mZ5D20OJJJkBoCn6J/J+IXmPABBIklxD203Poe2hsToA9mMEmScx2wiUDoCIxP2m59BmUPx0L0AowNhC0PyNBABi3Gt6Du0OsW8+BBomMiAd6vDj3+TQa0MNyR4A0j0CQwsd+N7WF0iW/abn0GZQjRqDAAACJN1CkZSvkHS/UFK+AsAk+0zPoc0htYhlKbspmjhweLNP6xdefk0OfQeCqsqUAfaoA1IOagPsGxIpB7JvSlWp/YuvyaHvQNVHDG0oSJwiqtYAkG4tBM0UiXESYnT1eQZIfQSZAfYI1ByT6hSonkH9BtxHnAKqUUO1hg2Y1SeSDTV+uEUcHao+oqYLs8sgLXHIK6OhW8TRIfu5AajMmH/9lTEUrUe4RRwfwsIf6K3JDL1SDpZluI84BbRSn5oplKo+VXPCZClzcIs4AbSIC5jzSVUY2hxHoIqQ5BZxCmhOJau0RGJZOwVzGXCtcQpIq06CJhODhPLpsQCBwDgJ0i0Wbj09h/aCkm6RqY1wrUIMb6U+GNpAe7rL9BzaQX0Gq0vZLXtY4ZIWSTxqnArSnGEQ21WX+CHSYRIRucxGs9v0HNoGmrvhkyDdWiDlq26tEzSZok/HKyRx8qhxAmhRoap9DcBUR8YsMwoeFU2PGoeGrEJlIlOzB64kqL5YtalbxMGhZWvr0cNYFLXnQoV3us4EPc50YVYdSCyQbowAxlj74vtMz6E9ogapEaK2tmzoAfMR9sl9xKGhRadr2dqyRHPxona/3CKODv13pisREOBiTuF2LQCmuDzY9eJrcujHodVZnkk0j8Bjx+VvXJNDT0JWiuC7iHY4RN6Kqk/psD7v90vW5NBXoNWuOlMY1RUgzHuxl10PzyMODYn/ZzKHHHLIIYcccuiL0D8b8JWmdpC6LAAAAABJRU5ErkJggg==" alt="QR code to open PlantCare AI"><div><h3>📱 Scan to open PlantCare AI</h3><p>Open your phone camera and point it at the QR code.</p><p><a href="https://plantcareai-kznq8jblfdsk3u5jvsw9rt.streamlit.app" target="_blank">plantcareai-kznq8jblfdsk3u5jvsw9rt.streamlit.app</a></p></div></div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-card"><h3>PlantCare AI — Made by Aradhy Mundhe</h3><p>This project was created by <b>Aradhy Mundhe</b> as a student project for plant identification, plant education and practical plant care.</p></div><div class="pc-card"><h3>What changed in this updated version?</h3><p>• Added a two-stage safety gate: general-object screening before plant species matching, followed by biological vision checks.<br>• Kept the offline-safe local visual screening so a model-loading problem does not crash the app.<br>• Reworked the sidebar into clear, large navigation buttons.<br>• Converted the interface to a consistent white-and-green theme.<br>• Added multi-view camera/gallery analysis, visual health screening, care requirements and clearer uncertainty messages.<br>• No OpenAI key, Gemini key or paid API is required.</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-info"><b>🔊 Spoken introduction:</b> The Home page includes a browser-based voice introduction explaining PlantCare AI, its creator, and its main features. Voice availability depends on the visitor’s browser and device.</div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-title">Sharing</div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-info"><b>For your teacher:</b> the easiest experience is a public hosted URL. A <code>localhost</code> address only works on the computer running PlantCare AI. The included launcher is for local use; online sharing requires deployment to a web host.</div>',unsafe_allow_html=True)
 
