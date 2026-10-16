@@ -1,0 +1,28 @@
+PlantCare AI — QA and limitations report
+
+Build: GitHub-ready update with spoken introduction and Care Confidence Passport.
+
+Checks performed for this package:
+- ZIP archive integrity: checked 20 times; no corrupt member detected.
+- Python syntax: app.py compiled successfully with py_compile and parsed with ast.parse.
+- Plant database: JSON parsed successfully; 56 unique common_name entries; required fields checked.
+- Required files: app.py, plant_data.json, requirements.txt, README.txt, MODEL_NOTES.txt and .streamlit/config.toml are present.
+- Feature wiring: checked for camera upload, gallery upload, visual health screening, care guidance, spoken Home introduction, and Care Confidence Passport text.
+- Package manifest: all expected files included; no duplicate archive paths.
+
+IMPORTANT LIMITATIONS:
+- These are static/package checks, not proof that the hosted website has zero runtime errors.
+- A full Streamlit browser launch and BioCLIP/OpenCLIP model-download test were not possible in the audit environment because Streamlit/OpenCLIP were unavailable there.
+- No labelled test dataset covering all 56 species was supplied. Species identification accuracy for every species is therefore NOT verified and must not be advertised as perfect.
+- The confidence band is a visual-match score, not a calibrated probability.
+- The health screen estimates colour patterns in an image. It is not leaf segmentation validated against horticultural ground truth and cannot diagnose a specific disease.
+- A photo cannot directly measure soil moisture, fertilizer/nutrient levels, root health, exact sunlight exposure, or pathogen identity. The app presents species-profile care guidance and asks the user to physically verify these factors.
+- The spoken introduction uses browser SpeechSynthesis; availability and voice quality depend on the browser/device, and the visitor must click Play.
+- My Plants/reminders remain session-based in this app; they may not persist after a session ends.
+
+Recommended release validation:
+1. Deploy to Streamlit Community Cloud and inspect logs.
+2. Test camera and gallery with clear photos of each of the 56 supported species, including look-alikes and different lighting.
+3. Test non-plant photos (phone, book, mug, person, sky) and low-quality/ambiguous images.
+4. Verify voice playback in Chrome and at least one mobile browser.
+5. Compare visual health alerts with human inspection before relying on them.
