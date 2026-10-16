@@ -32,25 +32,31 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    :root{--g:#138a4b;--gd:#0b6b39;--gm:#eaf8ef;--ink:#173225;--muted:#64766b;--line:#d8e9dd;--bg:#f7fbf8;--white:#fff}
-    .stApp{background:linear-gradient(180deg,#f7fbf8 0,#fff 40%);color:var(--ink)}
+    :root{--g:#138a4b;--gd:#0b6b39;--gm:#eaf8ef;--ink:#173225;--muted:#526b5d;--line:#d2e5d7;--bg:#f5faf6;--white:#fff;--lime:#f0f7b5}
+    .stApp{background:linear-gradient(180deg,#f4faf5 0,#fff 46%);color:var(--ink);font-size:1.08rem}
+    .stMarkdown p,.stMarkdown li{font-size:1.04rem;line-height:1.68}
+    .stMarkdown h1{font-size:2.55rem!important;letter-spacing:-.025em}
+    .stMarkdown h2{font-size:2rem!important}
+    .stMarkdown h3{font-size:1.4rem!important}
+    label,[data-testid="stWidgetLabel"] p{font-size:1rem!important;font-weight:700!important}
+    .stCaption,[data-testid="stCaptionContainer"]{font-size:.9rem!important}
     [data-testid="stHeader"]{background:rgba(255,255,255,.94)}
     [data-testid="stSidebar"]{background:linear-gradient(180deg,#effaf3 0,#f8fcf9 100%);border-right:1px solid var(--line)}
     [data-testid="stSidebar"] *{color:var(--ink)}
     .pc-brand{display:flex;align-items:center;gap:12px;padding:6px 4px 22px}
-    .pc-logo{width:52px;height:52px;border-radius:17px;background:linear-gradient(135deg,#17a65a,#0a6a39);display:flex;align-items:center;justify-content:center;font-size:27px;box-shadow:0 10px 22px rgba(10,106,57,.18)}
-    .pc-brand-title{font-size:1.2rem;font-weight:900;line-height:1.05}.pc-brand-sub{font-size:.78rem;color:var(--muted);margin-top:5px}
+    .pc-logo{width:58px;height:58px;border-radius:19px;background:linear-gradient(145deg,#e8f7b9,#f8ffe8);border:1px solid #c6e49a;display:flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 8px 20px rgba(10,106,57,.14)}
+    .pc-brand-title{font-size:1.38rem;font-weight:950;line-height:1.05;letter-spacing:-.02em}.pc-brand-sub{font-size:.88rem;color:var(--muted);margin-top:6px}
     .pc-nav-title{font-size:.73rem;font-weight:800;letter-spacing:.08em;color:#6a7d71;text-transform:uppercase;margin:4px 0 8px}
     .pc-hero{color:#fff;border-radius:28px;padding:34px 36px;margin-bottom:22px;background:radial-gradient(circle at 92% 10%,rgba(255,255,255,.35),transparent 25%),linear-gradient(135deg,#0b6a38,#15914f 55%,#62bf7e);box-shadow:0 18px 45px rgba(20,120,64,.16)}
-    .pc-hero h1{margin:0;color:#fff;font-size:clamp(2rem,4vw,3.25rem);line-height:1;letter-spacing:-.035em}.pc-hero p{margin:13px 0 0;color:rgba(255,255,255,.94);max-width:800px;line-height:1.55;font-size:1.02rem}
-    .pc-pills{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}.pc-pill{border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.15);border-radius:999px;padding:7px 11px;color:#fff;font-size:.82rem;font-weight:800}
-    .pc-card{background:#fff;border:1px solid var(--line);border-radius:22px;padding:21px;box-shadow:0 10px 28px rgba(22,55,35,.055);height:100%}.pc-card h3{margin:0 0 8px;color:var(--ink);font-size:1.05rem}.pc-card p{margin:0;color:var(--muted);line-height:1.55;font-size:.92rem}
-    .pc-stat{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px 20px;box-shadow:0 8px 22px rgba(22,55,35,.05)}.pc-stat-num{font-size:1.6rem;font-weight:900;color:var(--gd)}.pc-stat-label{font-size:.78rem;color:var(--muted);margin-top:5px}
-    .pc-title{font-size:1.45rem;font-weight:900;color:var(--ink);margin:28px 0 12px}.pc-result{background:linear-gradient(180deg,#f5fcf7,#fff);border:1px solid #c9e5d1;border-radius:24px;padding:23px;box-shadow:0 10px 28px rgba(22,55,35,.06)}.pc-result-name{font-size:clamp(1.7rem,3vw,2.35rem);font-weight:950;color:var(--gd);margin:0}.pc-scientific{color:var(--muted);font-size:.93rem;margin-top:5px}.pc-badge{display:inline-block;background:var(--gm);color:#116335;border:1px solid #cde8d4;border-radius:999px;padding:6px 10px;font-size:.82rem;font-weight:850;margin-top:10px}
+    .pc-hero h1{margin:0;color:#fff;font-size:clamp(2rem,4vw,3.25rem);line-height:1;letter-spacing:-.035em}.pc-hero p{margin:15px 0 0;color:rgba(255,255,255,.97);max-width:850px;line-height:1.65;font-size:1.16rem}
+    .pc-pills{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}.pc-pill{border:1px solid rgba(255,255,255,.32);background:rgba(255,255,255,.16);border-radius:999px;padding:8px 13px;color:#fff;font-size:.92rem;font-weight:850}
+    .pc-card{background:#fff;border:1px solid var(--line);border-radius:22px;padding:21px;box-shadow:0 10px 28px rgba(22,55,35,.055);height:100%}.pc-card h3{margin:0 0 10px;color:var(--ink);font-size:1.22rem}.pc-card p{margin:0;color:var(--muted);line-height:1.65;font-size:1.02rem}
+    .pc-stat{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px 20px;box-shadow:0 8px 22px rgba(22,55,35,.05)}.pc-stat-num{font-size:1.9rem;font-weight:950;color:var(--gd)}.pc-stat-label{font-size:.92rem;color:var(--muted);margin-top:7px}
+    .pc-title{font-size:1.72rem;font-weight:950;color:var(--ink);margin:30px 0 15px}.pc-result{background:linear-gradient(180deg,#f5fcf7,#fff);border:1px solid #c9e5d1;border-radius:24px;padding:23px;box-shadow:0 10px 28px rgba(22,55,35,.06)}.pc-result-name{font-size:clamp(1.7rem,3vw,2.35rem);font-weight:950;color:var(--gd);margin:0}.pc-scientific{color:var(--muted);font-size:.93rem;margin-top:5px}.pc-badge{display:inline-block;background:var(--gm);color:#116335;border:1px solid #cde8d4;border-radius:999px;padding:6px 10px;font-size:.82rem;font-weight:850;margin-top:10px}
     .pc-info{background:#f5fbf7;border:1px solid var(--line);border-radius:16px;padding:14px 16px;line-height:1.5}.pc-warning{background:#fff8e8;border:1px solid #f0dd9b;color:#6e5513;border-radius:16px;padding:14px 16px}.pc-error{background:#fff1f1;border:1px solid #f1c5c5;color:#8a2020;border-radius:16px;padding:14px 16px}
     .pc-footer{text-align:center;color:#7b8c82;font-size:.78rem;padding:35px 0 15px}
-    .pc-page-byline{display:flex;align-items:center;justify-content:flex-end;gap:7px;color:#527063;font-size:.78rem;font-weight:850;margin:0 2px 12px}.pc-page-byline strong{color:#0b6b39}.pc-safety{background:#f3fbf6;border:1px solid #cce5d3;border-radius:16px;padding:12px 15px;margin:10px 0;color:#315f43;font-size:.84rem;line-height:1.5}.pc-home-grid{margin-top:8px}.pc-mini{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px 18px;box-shadow:0 8px 22px rgba(22,55,35,.045)}.pc-mini b{display:block;color:#0b6b39;font-size:1.1rem}.pc-mini span{display:block;color:#64766b;font-size:.8rem;margin-top:4px}
-    .stButton>button{border-radius:13px!important;min-height:44px!important;border:1px solid #cfe2d5!important;font-weight:800!important;background:#fff!important;color:#173225!important}
+    .pc-page-byline{display:flex;align-items:center;justify-content:flex-end;gap:7px;color:#527063;font-size:.78rem;font-weight:850;margin:0 2px 12px}.pc-page-byline strong{color:#0b6b39}.pc-safety{background:#f3fbf6;border:1px solid #cce5d3;border-radius:16px;padding:12px 15px;margin:10px 0;color:#315f43;font-size:.84rem;line-height:1.5}.pc-home-grid{margin-top:8px}.pc-mini{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px 18px;box-shadow:0 8px 22px rgba(22,55,35,.045)}.pc-mini b{display:block;color:#0b6b39;font-size:1.28rem}.pc-mini span{display:block;color:#526b5d;font-size:.94rem;margin-top:6px}
+    .stButton>button{border-radius:15px!important;min-height:50px!important;border:1px solid #cfe2d5!important;font-size:1.02rem!important;font-weight:850!important;background:#fff!important;color:#173225!important;padding:.55rem 1rem!important}
     .stButton>button:hover{border-color:#7ab58d!important;color:#0b6b39!important}
     .stButton>button[kind="primary"]{background:linear-gradient(135deg,#168d4d,#0b6b39)!important;color:#fff!important;border:0!important;box-shadow:0 8px 18px rgba(22,141,77,.18)}
     [data-testid="stFileUploader"]{background:#fff;border:1px dashed #b7d4bf;border-radius:18px;padding:4px}
@@ -497,20 +503,25 @@ def general_object_screen(img_bytes: bytes):
         # Hard everyday-object evidence wins unless there is similarly strong
         # botanical evidence. This specifically prevents vehicles/people/etc.
         # from reaching the 56-class BioCLIP species matcher.
+        # Avoid rejecting genuine plants merely because the photo also contains
+        # a pot, garden furniture, a hand, or another background object. Reject
+        # only when an everyday non-plant class is strong and botanical evidence
+        # is weak across the inspected views.
         reject=bool(
-            hard_hits and
-            (
-                (top1 in {n for n,_ in hard_hits} and top1_score >= 0.18 and plant_max < 0.18) or
-                (hard_max >= 0.28 and hard_max >= plant_max * 1.35) or
-                (hard_max >= 0.42)
+            hard_hits and plant_max < 0.20 and (
+                (top1 in {n for n,_ in hard_hits} and top1_score >= 0.30) or
+                (hard_max >= 0.38 and hard_max >= plant_max * 1.75) or
+                hard_max >= 0.58
             )
         )
         reason=f"General vision screening recognized a non-plant object ({top1})." if reject else ""
         return reject,reason,{"top":top,"top1":top1,"top1_score":top1_score,"hard_hits":hard_hits,"plant_hits":plant_hits,"hard_max":hard_max,"plant_max":plant_max}
     except Exception as exc:
-        # Safety rule: if the independent object gate cannot run, do not silently
-        # allow BioCLIP to force an object into a plant species.
-        return True, f"Smart Rejection could not verify the image as a plant ({type(exc).__name__}). Please try Analyze again.", {"error":f"{type(exc).__name__}: {exc}", "gate_unavailable": True}
+        # The general ImageNet model may be unavailable on a fresh cloud deploy
+        # (for example, if its weights cannot be downloaded). Do not classify the
+        # upload as a non-plant solely because this optional gate failed. Continue
+        # to BioCLIP's plant/object checks and the conservative image-quality path.
+        return False, "", {"error":f"{type(exc).__name__}: {exc}", "gate_unavailable": True}
 
 
 def optional_vision_rank(img: Image.Image, filename_hint: str = ""):
@@ -817,7 +828,7 @@ def confidence_label(rows: List[Tuple[dict,float]]) -> Tuple[str,int]:
 NAV=[("🏠","Home"),("📷","Identify a Plant"),("🌿","Plant Library"),("🔎","Search"),("❤️","My Plants"),("ℹ️","About")]
 
 with st.sidebar:
-    st.markdown('<div class="pc-brand"><div class="pc-logo">🌿</div><div><div class="pc-brand-title">PlantCare AI</div><div class="pc-brand-sub">Identify • Learn • Care</div></div></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-brand"><div class="pc-logo"><svg viewBox="0 0 64 64" width="43" height="43" aria-label="PlantCare AI leaf logo"><circle cx="32" cy="32" r="29" fill="#ffffff" stroke="#b9dc82" stroke-width="2"/><path d="M17 42 C16 24 29 14 47 13 C47 30 38 44 22 46 Z" fill="#168348"/><path d="M19 49 C26 37 33 29 43 20" fill="none" stroke="#eaf8bd" stroke-width="3" stroke-linecap="round"/><path d="M30 36 C28 29 25 25 20 23 C19 31 23 36 30 36 Z" fill="#9bd65d"/></svg></div><div><div class="pc-brand-title">PlantCare AI</div><div class="pc-brand-sub">Identify • Learn • Care</div></div></div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-nav-title">Menu</div>',unsafe_allow_html=True)
     for icon,name in NAV:
         if st.button(f"{icon}  {name}",key=f"nav_{name}",width="stretch",type="primary" if st.session_state.page==name else "secondary"):
@@ -1038,31 +1049,16 @@ page=st.session_state.page
 # Home
 # -----------------------------------------------------------------------------
 if page=="Home":
-    st.markdown('<div class="pc-hero"><h1>PlantCare AI</h1><p>Identify plants, learn their characteristics, and explore practical care information in a clean, simple interface.</p><div class="pc-author">🌿 Made by Aradhy Mundhe</div><div class="pc-pills"><span class="pc-pill">📷 Photo analysis</span><span class="pc-pill">🌱 Plant library</span><span class="pc-pill">🧠 BioCLIP vision</span><span class="pc-pill">⚡ No API key</span><span class="pc-pill">💻 Easy Windows setup</span></div></div>',unsafe_allow_html=True)
-    cols=st.columns(4)
-    for c,(v,l) in zip(cols,[(len(PLANTS),"Plants in library"),("📷","Photo identification"),("🌱","Plant care"),("⏰","Care reminders")]):
-        with c: st.markdown(f'<div class="pc-stat"><div class="pc-stat-num">{v}</div><div class="pc-stat-label">{l}</div></div>',unsafe_allow_html=True)
-    st.markdown('<div class="pc-title">Explore PlantCare AI</div>',unsafe_allow_html=True)
-    hs1,hs2,hs3,hs4=st.columns(4)
-    for col,num,label in [(hs1,str(len(PLANTS)),"Plant profiles"),(hs2,"2-stage","Plant safety gate"),(hs3,"No API","Paid key required"),(hs4,"100%", "Free public app")]:
-        with col: st.markdown(f'<div class="pc-mini"><b>{num}</b><span>{label}</span></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-hero" style="background:radial-gradient(circle at 88% 12%,rgba(240,247,181,.42),transparent 25%),linear-gradient(135deg,#084f2b,#0b6b39 52%,#269a57)"><div style="display:flex;align-items:center;gap:15px;margin-bottom:12px"><div style="width:66px;height:66px;border-radius:22px;background:linear-gradient(145deg,#eaf8bd,#fff);display:flex;align-items:center;justify-content:center;font-size:38px;box-shadow:0 8px 22px rgba(0,0,0,.12)">🌿</div><div><div style="font-size:.9rem;font-weight:850;letter-spacing:.12em;color:#d8f0b0;text-transform:uppercase">Smarter care for healthier plants</div><div style="font-size:clamp(2.4rem,4.5vw,3.65rem);font-weight:950;letter-spacing:-.045em;line-height:1.05;color:#fff">PlantCare AI</div></div></div><p>🌱 Identify a plant, discover its needs, and build better care habits — all in one friendly place.</p><div class="pc-author">✨ Made by Aradhy Mundhe</div><div class="pc-pills"><span class="pc-pill">📸 Photo identification</span><span class="pc-pill">🌿 56 plant profiles</span><span class="pc-pill">🛡️ Smart rejection</span><span class="pc-pill">💚 Practical care guidance</span></div></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-title">🌼 Start exploring</div>',unsafe_allow_html=True)
     a,b,c=st.columns(3)
-    for col,title,desc in [(a,"📷 Identify a Plant","Take a photo with the camera or upload one from your gallery to find a possible plant match."),(b,"📚 Learn & Explore","Browse plant photos, identification features, growing conditions, care, pests and safety information."),(c,"❤️ My Plants","Save plants and set reminders for watering, fertilizer, pesticide, weedicide and other care tasks.")]:
+    for col,title,desc in [(a,"📸 Identify a Plant","Take a photo or upload an image to find a possible plant match, then review its care profile."),(b,"🌳 Explore the Plant Library","Browse plant photos, botanical names, growing conditions, common problems and safety information."),(c,"🪴 My Plants & Reminders","Keep track of your plants and set reminders for watering, sunlight, pruning and other care tasks.")]:
         with col: st.markdown(f'<div class="pc-card"><h3>{title}</h3><p>{desc}</p></div>',unsafe_allow_html=True)
-    st.markdown('<div class="pc-title">Smart care tools</div>',unsafe_allow_html=True)
-    x1,x2,x3=st.columns(3)
-    for col,title,desc in [(x1,"🧠 Smart rejection","Screens text-heavy and obvious non-plant images before accepting a species match."),(x2,"🩺 Visual health check","Highlights visible yellowing, browning and other stress patterns without pretending to diagnose disease."),(x3,"📊 Care readiness","Combines watering, light, soil, fertilizer, pests and growth guidance into one plant-care view.")]:
-        with col: st.markdown(f'<div class="pc-card"><h3>{title}</h3><p>{desc}</p></div>',unsafe_allow_html=True)
-    st.markdown('<div class="pc-title">PlantCare AI toolkit</div>',unsafe_allow_html=True)
-    t1,t2,t3=st.columns(3)
-    for col,title,desc in [
-        (t1,"🛡️ Smart Rejection","Separates everyday objects and text-heavy images from plant photos before species matching."),
-        (t2,"🌿 PlantCare Score","Summarizes visible plant condition and care-readiness signals without pretending to measure what a photo cannot measure."),
-        (t3,"📋 Care-ready profiles","Combines water, light, soil, fertilizer, pests, diseases, growth and safety guidance in one place.")
-    ]:
-        with col: st.markdown(f'<div class="pc-card"><h3>{title}</h3><p>{desc}</p></div>',unsafe_allow_html=True)
-    st.markdown('<div class="pc-title">How it works</div>',unsafe_allow_html=True)
-    st.markdown('<div class="pc-info"><b>1.</b> Choose a photo &nbsp; → &nbsp; <b>2.</b> Analyze the image &nbsp; → &nbsp; <b>3.</b> Review the possible plant match &nbsp; → &nbsp; <b>4.</b> Explore its care profile or save it to My Plants.</div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-title">🌱 Your plant-care journey</div>',unsafe_allow_html=True)
+    steps=st.columns(4)
+    for col,emoji,title,desc in zip(steps,["📷","🔎","🌞","🪴"],["Capture","Identify","Learn","Care"],["Choose a clear plant photo.","Review a possible match.","Understand light, water and soil.","Save plants and plan routines."]):
+        with col: st.markdown(f'<div class="pc-mini" style="min-height:145px"><div style="font-size:2rem;margin-bottom:7px">{emoji}</div><b>{title}</b><span>{desc}</span></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-info" style="margin-top:18px"><b>🌿 Our approach:</b> Helpful plant information with honest uncertainty. Photo-based suggestions are guidance, not a guaranteed botanical diagnosis.</div>',unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # Identify
@@ -1322,7 +1318,9 @@ elif page=="Search":
         else:
             st.info("No plant suggestion yet. Try another spelling or search by scientific name.")
     selected=st.session_state.get("selected_plant")
-    if selected and (not ql or selected.lower()==ql):
+    # A suggestion/library click is an explicit selection. Show that profile even
+    # when the text box still contains the previous partial query on rerun.
+    if selected:
         p=PLANT_BY_NAME.get(selected)
         st.session_state.pop("selected_plant",None)
         if p: show_profile(p)
