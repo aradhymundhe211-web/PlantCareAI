@@ -503,25 +503,20 @@ def general_object_screen(img_bytes: bytes):
         # Hard everyday-object evidence wins unless there is similarly strong
         # botanical evidence. This specifically prevents vehicles/people/etc.
         # from reaching the 56-class BioCLIP species matcher.
-        # Avoid rejecting genuine plants merely because the photo also contains
-        # a pot, garden furniture, a hand, or another background object. Reject
-        # only when an everyday non-plant class is strong and botanical evidence
-        # is weak across the inspected views.
         reject=bool(
-            hard_hits and plant_max < 0.20 and (
-                (top1 in {n for n,_ in hard_hits} and top1_score >= 0.30) or
-                (hard_max >= 0.38 and hard_max >= plant_max * 1.75) or
-                hard_max >= 0.58
+            hard_hits and
+            (
+                (top1 in {n for n,_ in hard_hits} and top1_score >= 0.18 and plant_max < 0.18) or
+                (hard_max >= 0.28 and hard_max >= plant_max * 1.35) or
+                (hard_max >= 0.42)
             )
         )
         reason=f"General vision screening recognized a non-plant object ({top1})." if reject else ""
         return reject,reason,{"top":top,"top1":top1,"top1_score":top1_score,"hard_hits":hard_hits,"plant_hits":plant_hits,"hard_max":hard_max,"plant_max":plant_max}
     except Exception as exc:
-        # The general ImageNet model may be unavailable on a fresh cloud deploy
-        # (for example, if its weights cannot be downloaded). Do not classify the
-        # upload as a non-plant solely because this optional gate failed. Continue
-        # to BioCLIP's plant/object checks and the conservative image-quality path.
-        return False, "", {"error":f"{type(exc).__name__}: {exc}", "gate_unavailable": True}
+        # Safety rule: if the independent object gate cannot run, do not silently
+        # allow BioCLIP to force an object into a plant species.
+        return True, f"Smart Rejection could not verify the image as a plant ({type(exc).__name__}). Please try Analyze again.", {"error":f"{type(exc).__name__}: {exc}", "gate_unavailable": True}
 
 
 def optional_vision_rank(img: Image.Image, filename_hint: str = ""):
@@ -1318,9 +1313,7 @@ elif page=="Search":
         else:
             st.info("No plant suggestion yet. Try another spelling or search by scientific name.")
     selected=st.session_state.get("selected_plant")
-    # A suggestion/library click is an explicit selection. Show that profile even
-    # when the text box still contains the previous partial query on rerun.
-    if selected:
+    if selected and (not ql or selected.lower()==ql):
         p=PLANT_BY_NAME.get(selected)
         st.session_state.pop("selected_plant",None)
         if p: show_profile(p)
