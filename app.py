@@ -1348,6 +1348,9 @@ page=st.session_state.page
 # -----------------------------------------------------------------------------
 # Home
 # -----------------------------------------------------------------------------
+# Shared PlantCare AI logo used across upload cards and page headers.
+logo_svg = """<svg viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="PlantCare AI logo"><circle cx="32" cy="32" r="29" fill="#f8ffe8" stroke="#9bce57" stroke-width="3"/><path d="M17 42 C16 24 29 14 47 13 C47 30 38 44 22 46 Z" fill="#168348"/><path d="M19 49 C26 37 33 29 43 20" fill="none" stroke="#eaf8bd" stroke-width="3" stroke-linecap="round"/><path d="M30 36 C28 29 25 25 20 23 C19 31 23 36 30 36 Z" fill="#9bd65d"/></svg>"""
+
 if page=="Home":
     st.markdown('''<div class="pc-home-hero"><div class="eyebrow">Smarter care for healthier plants</div><div class="mark"><div class="leaf-icon"></div><div><h1>PlantCare AI</h1><div class="tagline">Healthy Plants&nbsp; 🌿 Greener Tomorrow</div></div></div><div class="copy">Identify a plant, discover its needs, and build better care habits — all in one friendly place.</div><div class="copy" style="font-size:.98rem;margin-top:4px">✨ Made by Aradhy Mundhe</div><div class="pc-pills"><span class="pc-pill">📸 Photo identification</span><span class="pc-pill">🌿 56 plant profiles</span><span class="pc-pill">🛡️ Smart rejection</span><span class="pc-pill">💚 Practical care guidance</span></div></div>''',unsafe_allow_html=True)
     stat_cols=st.columns(4)
