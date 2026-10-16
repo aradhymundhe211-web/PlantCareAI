@@ -5,4 +5,3 @@ torch==2.5.1
 torchvision==0.20.1
 open_clip_torch==2.31.0
 requests==2.32.5
-
