@@ -5,7 +5,7 @@ from pathlib import Path
 from plantcare_core import assess_plant_health, validate_plant_records
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parent
 
 
 class PlantLibraryTests(unittest.TestCase):
