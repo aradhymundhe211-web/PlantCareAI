@@ -12,7 +12,15 @@ Key features
 - Visual leaf-colour screening (not a confirmed disease diagnosis)
 - Single-photo care guidance and plant-profile information
 - My Plants and reminders with an explicit 12-hour AM/PM time selector
-- No paid AI API key required
+- Local BioCLIP fallback works without an API key; optional Pl@ntNet API is used first when configured
+
+Optional higher-recall plant identification (recommended for deployment)
+1. Create an account and obtain a private API key at https://my.plantnet.org/ . Check current quota and terms before sharing the app publicly.
+2. In Streamlit Community Cloud, open your app settings and add this under the Secrets section:
+   PLANTNET_API_KEY = "paste-your-private-key-here"
+3. Do not put the key in app.py, plantnet_client.py, a public GitHub file, or a screenshot. Keep it in Streamlit Secrets.
+4. Commit/push the code and reboot the Streamlit app. When configured, Pl@ntNet is tried first. Results are mapped to the 56-plant library only by exact scientific-name match; otherwise the local classifier is used as a fallback.
+5. The documented free allowance is up to 500 identification requests per day, subject to account quota and terms. Each identification sends the selected image to Pl@ntNet.
 
 Run locally
 1. Install a compatible Python version and the packages listed in requirements.txt.
@@ -22,11 +30,11 @@ Run locally
 Deployment notes
 - Upload the contents of this folder to the repository root while preserving .streamlit/config.toml inside the .streamlit folder.
 - Streamlit Community Cloud must finish rebuilding after a commit before testing the hosted app.
-- The spoken Home-page introduction has been removed. Written creator credits remain.
+- The Home page introduces PlantCare AI in text and offers a user-triggered spoken introduction. Browser autoplay restrictions mean the voice does not automatically play without a click.
 - Reminders are currently session-scoped and are not guaranteed to survive a new session or browser reset.
 
 Accuracy and safety
-- The app returns possible matches from its 56-plant library, not a guarantee that every image will be identified correctly.
+- When configured, Pl@ntNet is tried first and results are mapped to the 56-plant library only by exact scientific-name match; BioCLIP remains the local fallback. This does not guarantee every image will be identified correctly.
 - Use clear, well-lit photos. Compare alternatives and the plant profile before acting on the result.
 - Visual fallback checks were widened to better admit flower-heavy photos and foliage under varied lighting. Non-plant screening is retained, but it is not infallible.
 - Visible leaf colours can flag patterns, but they do not confirm a disease or measure soil moisture, fertilizer/nutrient levels, or root health.
