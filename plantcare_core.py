@@ -202,4 +202,3 @@ def assess_plant_health(
         "observations": {"soil_moisture": soil_state, "watering_frequency": watering_frequency, "pot_drainage": pot_drainage, "light": light_state, "plant_location": plant_location, "symptom_location": symptom_location, "symptom_duration": symptom_duration, "pest_seen": pest_seen, "recent_change": recent_change},
         "disclaimer": "A text/image screening cannot confirm a pathogen, measure soil moisture or nutrient levels, or replace a qualified horticulturist's assessment.",
     }
-
