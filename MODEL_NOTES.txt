@@ -1,22 +1,15 @@
-PlantCare AI — Model Notes
+PlantCare AI model notes
 
-Primary optional model service: Pl@ntNet API
-- Endpoint: https://my-api.plantnet.org/v2/identify/all
-- Requires PLANTNET_API_KEY in Streamlit Secrets or the environment.
-- The service returns ranked scientific taxa and scores. PlantCare AI maps results into the local 56-plant library only when scientific names match exactly after normalization.
-- A result outside the supported library is not silently relabelled as a supported plant; the local BioCLIP classifier is used as a fallback.
-- Pl@ntNet API service documentation: https://my.plantnet.org/doc/api/identify
-- API key must never be committed to public source control. Uploaded photos are sent to Pl@ntNet when configured.
+Primary model: BioCLIP 2 (open-source biology vision-language model)
+Fallback model: Original BioCLIP
+Classification approach: prompt ensembles + multi-view image ranking over 56 supported plant records.
+Non-plant safeguards: general ImageNet object classifier when its weights load, plus a text/document screen. The app defers uncertain plant-vs-object cases to species matching rather than rejecting a plant on uncertain evidence.
 
-Local fallback: BioCLIP via open_clip
-- Model ID: hf-hub:imageomics/bioclip
-- Zero-shot text prompts cover all 56 local plant records, with multiple botanical descriptions and multi-view image scoring.
-- A separate general-object screen and plant-presence prompts help reject non-plant images, but these gates can still make mistakes.
-- The local fallback is not a fine-tuned classifier trained specifically on the project's 56 plant classes.
-
-Scope and limitations
-- No single model guarantees correct classification for every photo, angle, cultivar, lighting condition or plant growth stage.
-- Pl@ntNet confidence scores are candidate scores, not a guarantee of correctness.
-- Accuracy on the exact 56 classes must be measured using a labelled holdout set of real photos per species and a separate non-plant set.
-- Tulsi vs Mint and Mango/Marigold should be tested with multiple independent photos, not just one image each.
-- Never treat the Plant Health Copilot as a disease diagnosis.
+Important limits
+- Model weights are downloaded at runtime; first use needs internet access.
+- BioCLIP 2 weights are large; hosting storage/memory can be limiting.
+- The 56-class list limits output to those classes and does not cover every plant species.
+- Similar species, poor lighting, distant subjects, mixed images and unusual growth stages may be misidentified.
+- Displayed match scores are not calibrated probabilities.
+- Plant Health Copilot gives symptom and care guidance, not laboratory disease diagnosis.
+- Do not describe this app as 100% accurate or fully offline.
