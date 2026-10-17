@@ -12,6 +12,7 @@ import uuid
 from typing import Dict, List, Tuple
 
 from plantcare_core import assess_plant_health, validate_plant_records
+from plantnet_client import identify_with_plantnet
 
 import numpy as np
 import requests
@@ -417,6 +418,17 @@ if PLANT_DATA_ERRORS:
     # Keep the application from presenting a broken library as valid.
     raise ValueError("Plant library validation failed: " + " ".join(PLANT_DATA_ERRORS))
 PLANT_BY_NAME = {p["common_name"]: p for p in PLANTS}
+
+def configured_plantnet_key() -> str:
+    """Read the API key from Streamlit secrets first, then the environment."""
+    try:
+        value = st.secrets.get("PLANTNET_API_KEY", "")
+        if value:
+            return str(value).strip()
+    except Exception:
+        # Streamlit secrets may not be configured in a local checkout.
+        pass
+    return os.environ.get("PLANTNET_API_KEY", "").strip()
 
 
 def load_my_plants() -> List[str]:
@@ -1521,6 +1533,43 @@ logo_svg = """<svg viewBox="0 0 64 64" width="64" height="64" role="img" aria-la
 
 if page=="Home":
     st.markdown('''<div class="pc-home-hero"><div class="eyebrow">Smarter care for healthier plants</div><div class="mark"><div class="leaf-icon"></div><div><h1>PlantCare AI</h1><div class="tagline">Healthy Plants&nbsp; 🌿 Greener Tomorrow</div></div></div><div class="copy">Identify a plant, discover its needs, and build better care habits — all in one friendly place.</div><div class="pc-pills"><span class="pc-pill">📸 Photo identification</span><span class="pc-pill">🌿 56 plant profiles</span><span class="pc-pill">🛡️ Smart rejection</span><span class="pc-pill">💚 Practical care guidance</span></div></div>''',unsafe_allow_html=True)
+    st.markdown(
+        '<div class="pc-card" style="margin:0 0 18px;border-left:6px solid #168044">'
+        '<h3>👋 Welcome! I am PlantCare AI.</h3>'
+        '<p>I help you explore 56 plant profiles, identify a possible plant from a photo, compare look-alike species, understand basic care needs, and work through plant-health observations. I show uncertainty when evidence is limited; I cannot guarantee every identification or diagnose a disease.</p>'
+        '<p><b>How to start:</b> open <i>Identify a Plant</i> to upload a clear photo, or open <i>Plant Health Copilot</i> to describe symptoms and growing conditions.</p></div>',
+        unsafe_allow_html=True,
+    )
+    st.components.v1.html('''
+    <div style="font-family:Arial,sans-serif;padding:0 2px 10px">
+      <button id="pcSpeakIntro" style="background:#0b754b;color:white;border:0;border-radius:12px;padding:10px 16px;font-weight:700;cursor:pointer">🔊 Hear the introduction</button>
+      <span id="pcSpeakStatus" style="font-size:13px;color:#426450;margin-left:8px">Audio starts only when you press the button.</span>
+    </div>
+    <script>
+      const b=document.getElementById('pcSpeakIntro'); const status=document.getElementById('pcSpeakStatus');
+      b.addEventListener('click',()=>{
+        try {
+          if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) { status.textContent='Speech is not supported in this browser. The introduction is available above as text.'; return; }
+          window.speechSynthesis.cancel();
+          const u=new SpeechSynthesisUtterance('Welcome to PlantCare AI. I help you explore our library of 56 plants, identify possible plant matches from photographs, compare similar species, and review plant-care concerns with the Plant Health Copilot. For the most useful results, upload a clear photo and check the suggested match carefully. My guidance is educational and cannot guarantee an identification or diagnose a disease. Let us help your plants grow.');
+          u.lang='en-IN'; u.rate=0.90; u.pitch=1.0; u.volume=1.0;
+          const chooseVoice=()=>{
+            const voices=window.speechSynthesis.getVoices() || [];
+            const english=voices.filter(v=>/^en(-|_)/i.test(v.lang));
+            const preferred=english.find(v=>/en-IN/i.test(v.lang) && /Google|Natural|Neural|Microsoft/i.test(v.name))
+              || english.find(v=>/en-IN/i.test(v.lang))
+              || english.find(v=>/Google|Natural|Neural|Microsoft/i.test(v.name))
+              || english[0];
+            if(preferred) u.voice=preferred;
+            window.speechSynthesis.speak(u);
+          };
+          const voices=window.speechSynthesis.getVoices();
+          if(voices.length) chooseVoice(); else { window.speechSynthesis.onvoiceschanged=()=>{ window.speechSynthesis.onvoiceschanged=null; chooseVoice(); }; setTimeout(()=>{ if(window.speechSynthesis.speaking===false && window.speechSynthesis.pending===false) chooseVoice(); },350); }
+          status.textContent='Playing the best available English voice on this device…';
+        } catch(e) { status.textContent='Could not play audio in this browser. Try another browser or use the written introduction above.'; }
+      });
+    </script>
+    ''', height=54)
     stat_cols=st.columns(4)
     for col,emoji,value,label in zip(stat_cols,["🌱","🎯","💚","🌎"],[str(len(PLANTS)),"AI","Care","Green"],["Plant Species","Photo Identification","Plant Care Support","Greener Future"]):
         with col:
@@ -1564,7 +1613,9 @@ if page=="Home":
 # Identify
 # -----------------------------------------------------------------------------
 elif page=="Identify a Plant":
-    st.markdown('<div class="pc-hero" style="padding:27px 30px;background:linear-gradient(110deg,#f7f7e8,#e3efd4)!important;color:#063b2b!important"><h1 style="font-size:2.45rem;color:#063b2b!important">🌿 Identify a Plant</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Take a photo or choose one from your gallery. PlantCare AI first checks whether the image actually contains a plant, then performs species matching. It will refuse a guess when the evidence is weak.</p><div class="pc-pills"><span class="pc-pill">🛡️ Non-plant gate</span><span class="pc-pill">🧠 Multi-view vision</span><span class="pc-pill">🌿 56-plant library</span><span class="pc-pill">⚠️ No forced guess</span></div></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-hero" style="padding:27px 30px;background:linear-gradient(110deg,#f7f7e8,#e3efd4)!important;color:#063b2b!important"><h1 style="font-size:2.45rem;color:#063b2b!important">🌿 Identify a Plant</h1><p>Take a photo or choose one from your gallery. PlantCare AI first checks whether the image actually contains a plant, then performs species matching. It will refuse a guess when the evidence is weak.</p><div class="pc-pills"><span class="pc-pill">🛡️ Non-plant gate</span><span class="pc-pill">🧠 Multi-view vision</span><span class="pc-pill">🌿 56-plant library</span><span class="pc-pill">⚠️ No forced guess</span></div></div>',unsafe_allow_html=True)
+    if configured_plantnet_key():
+        st.caption("PlantCare AI uses the Pl@ntNet recognition API when configured. Uploaded identification photos are sent to Pl@ntNet for analysis; see its terms at https://my.plantnet.org/doc/getting-started/faq .")
 
     if "selected_image_bytes" not in st.session_state:
         st.session_state.selected_image_bytes = None
@@ -1590,7 +1641,7 @@ elif page=="Identify a Plant":
             st.session_state.selected_image_source = "Gallery"
             st.session_state.selected_image_name = uploaded.name or "gallery_photo"
             st.session_state.analysis = None
-    st.markdown('<div class="pc-how"><div class="pc-how-title">How It Works?</div><div class="pc-how-grid"><div class="pc-how-step"><div class="pc-how-icon">🛡️</div><b>1. Smart Rejection</b><span>Non-plant check</span></div><div class="pc-how-step"><div class="pc-how-icon">🌿</div><b>2. Visual Health Check</b><span>Plant health analysis</span></div><div class="pc-how-step"><div class="pc-how-icon">🔬</div><b>3. Plant Identification</b><span>BioCLIP + 56 species</span></div><div class="pc-how-step"><div class="pc-how-icon">🌱</div><b>4. Care Recommendations</b><span>PlantCare Score</span></div></div></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-how"><div class="pc-how-title">How It Works?</div><div class="pc-how-grid"><div class="pc-how-step"><div class="pc-how-icon">🛡️</div><b>1. Smart Rejection</b><span>Non-plant check</span></div><div class="pc-how-step"><div class="pc-how-icon">🌿</div><b>2. Visual Health Check</b><span>Plant health analysis</span></div><div class="pc-how-step"><div class="pc-how-icon">🔬</div><b>3. Plant Identification</b><span>Specialist API + local fallback</span></div><div class="pc-how-step"><div class="pc-how-icon">🌱</div><b>4. Care Recommendations</b><span>PlantCare Score</span></div></div></div>',unsafe_allow_html=True)
 
     raw=st.session_state.selected_image_bytes
     if raw:
@@ -1608,7 +1659,11 @@ elif page=="Identify a Plant":
                 with c4: growth=st.selectbox("Growth habit",["Not sure","Upright","Trailing/vining","Clumping","Tree/shrub","Rosette"],key="growth_v5")
                 with c5: thorns=st.selectbox("Thorns / spines",["Not sure","Present","Not visible"],key="thorns_v5")
 
-            st.markdown('<div class="pc-analyze-box"><div><b>Ready to identify this photo?</b><br><span>The app first screens the image for obvious non-plant objects, then checks plant presence and performs BioCLIP species matching. It does not intentionally force every image into the 56-plant library; when reliable evidence is missing, it asks you to try again. The filename is never used to choose the plant.</span></div></div>',unsafe_allow_html=True)
+            if configured_plantnet_key():
+                id_engine_copy = "Pl@ntNet API will be tried first and matched against the 56 supported scientific names. If it cannot map a species to this library or the service is unavailable, the local classifier may be used as a fallback. The filename is never used to choose the plant."
+            else:
+                id_engine_copy = "The local BioCLIP model will be used. For stronger plant identification, configure a private Pl@ntNet API key in Streamlit Secrets; without it, valid plants may still be missed or confused. The filename is never used to choose the plant."
+            st.markdown(f'<div class="pc-analyze-box"><div><b>Ready to identify this photo?</b><br><span>{id_engine_copy}</span></div></div>',unsafe_allow_html=True)
             analyze=st.button("🔎  ANALYZE IMAGE",type="primary",width="stretch",key="analyze_v10")
             cclear,_=st.columns([1,4])
             with cclear:
@@ -1633,71 +1688,88 @@ elif page=="Identify a Plant":
                         reject_object=False
                         object_reason=""
                         general_meta={}
-                        try:
-                            gate_is_plant, gate_score, gate_reason, gate_meta = vision_gate(image)
-                            general_meta=gate_meta
-                            if not gate_is_plant:
-                                reject_object=True
-                                object_reason=gate_reason or "Plant not detected with enough confidence"
-                        except Exception as gate_exc:
-                            # Do not silently guess if the gate itself crashes.
-                            reject_object=True
-                            object_reason=f"Plant detection could not be verified ({type(gate_exc).__name__}). Please try again with a clearer photo."
-                        if reject_object:
-                            st.session_state.analysis={"nonplant":True,"reason":object_reason,"score":0.0}
+                        plantnet_key = configured_plantnet_key()
+                        plantnet_result = identify_with_plantnet(raw, PLANTS, plantnet_key) if plantnet_key else {"ok": False, "rows": [], "message": "Pl@ntNet API key is not configured.", "top_external": "", "raw_top_score": 0.0}
+                        if plantnet_result.get("ok") and plantnet_result.get("rows"):
+                            rows = plantnet_result["rows"][:8]
+                            top_score = float(rows[0][1])
+                            label = "Pl@ntNet species match" if top_score >= 0.20 else "Pl@ntNet candidate — confirm visually"
+                            conf = max(1, min(99, int(round(top_score * 100))))
+                            health=visual_health_screen(image)
+                            care=care_assessment(image, rows[0][0], health)
+                            st.session_state.analysis={"rows":rows,"label":label,"conf":conf,"score":top_score,"model_note":"Pl@ntNet API · exact supported-species match","model_error":"","health":health,"care":care,"species_unavailable":False,"plantnet_message":plantnet_result.get("message", "")}
+                        elif plantnet_result.get("ok") and plantnet_result.get("top_external"):
+                            # A plant was identified, but the leading candidate is outside
+                            # the supported library. Do not force it into an unrelated class.
+                            st.session_state.analysis={"outside_library":True,"external_species":plantnet_result.get("top_external"),"model_note":"Pl@ntNet API · species outside supported library"}
                         else:
-                            ai_rows, model_used, model_error = optional_vision_rank(image, st.session_state.get("selected_image_name", ""))
-                        if not reject_object and model_used and ai_rows:
-                            rows=ai_rows
-                            # Secondary BioCLIP/context checks catch text-heavy images
-                            # and cases where the general model is uncertain.
-                            if not reject_object:
-                                try:
-                                    _, _, obj_plant_score, obj_margin, obj_meta = _strong_object_screen(image)
-                                    if obj_meta.get("object_score",0.0) >= 32.0 and obj_margin <= -6.0:
-                                        reject_object=True
-                                        object_reason="The photo is much more consistent with a non-plant object than with plant imagery."
-                                except Exception:
-                                    pass
+                            # Use the local pipeline when no API key is configured, when
+                            # the API cannot return a result, or when it rejects an image.
                             try:
-                                ctx_plant,ctx_text,ctx_margin,doc_score=bioclip_context_screen(image)
-                                if (ctx_text>=31.0 and ctx_margin<=-2.0) or (doc_score>=.72 and ctx_margin<3.0):
+                                gate_is_plant, gate_score, gate_reason, gate_meta = vision_gate(image)
+                                general_meta=gate_meta
+                                if not gate_is_plant:
                                     reject_object=True
-                                    object_reason="The image appears to contain mostly text or document content, not a plant."
-                            except Exception:
-                                pass
-
+                                    object_reason=gate_reason or "Plant not detected with enough confidence"
+                            except Exception as gate_exc:
+                                # Do not silently guess if the gate itself crashes.
+                                reject_object=True
+                                object_reason=f"Plant detection could not be verified ({type(gate_exc).__name__}). Please try again with a clearer photo."
                             if reject_object:
                                 st.session_state.analysis={"nonplant":True,"reason":object_reason,"score":0.0}
                             else:
-                                if clues:
-                                    adjusted=[]
-                                    for p,s in rows:
-                                        txt=" ".join(str(p.get(k,"")) for k in ["common_name","category","identification","leaf","flower","growth","similar"]).lower()
-                                        bonus=sum(.01 for c in clues if c in txt)
-                                        adjusted.append((p,min(1.0,s+bonus)))
-                                    rows=sorted(adjusted,key=lambda x:x[1],reverse=True)
-                                label,conf=confidence_label(rows)
-                                model_note="BioCLIP biology vision model"
-                                health=visual_health_screen(image)
-                                care=care_assessment(image, rows[0][0], health)
-                                st.session_state.analysis={"rows":rows,"label":label,"conf":conf,"score":1.0,"model_note":model_note,"model_error":model_error,"health":health,"care":care,"species_unavailable":False}
-                        elif not reject_object:
-                            # BioCLIP could not run. Use the local visual screen only
-                            # as a plant-presence fallback; do not claim a species unless
-                            # the user supplied meaningful botanical clues. Do not enter
-                            # this branch after the plant-presence gate has rejected an image.
-                            local_is_plant,local_score,local_reason,local_features=plant_gate(image)
-                            if not local_is_plant:
-                                st.session_state.analysis={"nonplant":True,"reason":local_reason,"score":local_score}
-                            else:
-                                rows=identify_locally(image,clues)[:4]
-                                label="Needs confirmation"
-                                conf=50
-                                model_note="Offline shortlist — BioCLIP unavailable"
-                                health=visual_health_screen(image)
-                                care=care_assessment(image, rows[0][0], health) if rows else None
-                                st.session_state.analysis={"rows":rows,"label":label,"conf":conf,"score":local_score,"model_note":model_note,"model_error":model_error,"health":health,"care":care,"species_unavailable":(not rows)}
+                                ai_rows, model_used, model_error = optional_vision_rank(image, st.session_state.get("selected_image_name", ""))
+                            if not reject_object and model_used and ai_rows:
+                                rows=ai_rows
+                                # Secondary BioCLIP/context checks catch text-heavy images
+                                # and cases where the general model is uncertain.
+                                if not reject_object:
+                                    try:
+                                        _, _, obj_plant_score, obj_margin, obj_meta = _strong_object_screen(image)
+                                        if obj_meta.get("object_score",0.0) >= 32.0 and obj_margin <= -6.0:
+                                            reject_object=True
+                                            object_reason="The photo is much more consistent with a non-plant object than with plant imagery."
+                                    except Exception:
+                                        pass
+                                try:
+                                    ctx_plant,ctx_text,ctx_margin,doc_score=bioclip_context_screen(image)
+                                    if (ctx_text>=31.0 and ctx_margin<=-2.0) or (doc_score>=.72 and ctx_margin<3.0):
+                                        reject_object=True
+                                        object_reason="The image appears to contain mostly text or document content, not a plant."
+                                except Exception:
+                                    pass
+
+                                if reject_object:
+                                    st.session_state.analysis={"nonplant":True,"reason":object_reason,"score":0.0}
+                                else:
+                                    if clues:
+                                        adjusted=[]
+                                        for p,s in rows:
+                                            txt=" ".join(str(p.get(k,"")) for k in ["common_name","category","identification","leaf","flower","growth","similar"]).lower()
+                                            bonus=sum(.01 for c in clues if c in txt)
+                                            adjusted.append((p,min(1.0,s+bonus)))
+                                        rows=sorted(adjusted,key=lambda x:x[1],reverse=True)
+                                    label,conf=confidence_label(rows)
+                                    model_note="BioCLIP biology vision model"
+                                    health=visual_health_screen(image)
+                                    care=care_assessment(image, rows[0][0], health)
+                                    st.session_state.analysis={"rows":rows,"label":label,"conf":conf,"score":1.0,"model_note":model_note,"model_error":model_error,"health":health,"care":care,"species_unavailable":False}
+                            elif not reject_object:
+                                # BioCLIP could not run. Use the local visual screen only
+                                # as a plant-presence fallback; do not claim a species unless
+                                # the user supplied meaningful botanical clues. Do not enter
+                                # this branch after the plant-presence gate has rejected an image.
+                                local_is_plant,local_score,local_reason,local_features=plant_gate(image)
+                                if not local_is_plant:
+                                    st.session_state.analysis={"nonplant":True,"reason":local_reason,"score":local_score}
+                                else:
+                                    rows=identify_locally(image,clues)[:4]
+                                    label="Needs confirmation"
+                                    conf=50
+                                    model_note="Offline shortlist — BioCLIP unavailable"
+                                    health=visual_health_screen(image)
+                                    care=care_assessment(image, rows[0][0], health) if rows else None
+                                    st.session_state.analysis={"rows":rows,"label":label,"conf":conf,"score":local_score,"model_note":model_note,"model_error":model_error,"health":health,"care":care,"species_unavailable":(not rows)}
         except Exception as exc:
             st.session_state.analysis=None
             # Distinguish a genuinely invalid image from a processing bug. This avoids
@@ -1717,6 +1789,8 @@ elif page=="Identify a Plant":
     result=st.session_state.analysis
     if result and result.get("nonplant"):
         st.markdown(f'<div class="pc-error"><b>🚫 NO PLANT DETECTED / PLANT NOT VERIFIED</b><br>{result["reason"]}. Try a clear, well-lit photo of a real plant with leaves, stems or flowers filling most of the frame. Ordinary objects must not be forced into a plant name.</div>',unsafe_allow_html=True)
+    elif result and result.get("outside_library"):
+        st.markdown(f'<div class="pc-warning"><b>🌿 Plant detected, but no supported 56-plant match was confirmed.</b><br>Pl@ntNet’s leading candidate is <i>{result["external_species"]}</i>. PlantCare AI will not relabel an unsupported species as one of the 56 library plants. If you expected a supported plant, try a clearer close-up of its flower, fruit or leaves.</div>',unsafe_allow_html=True)
     elif result and result.get("species_unavailable"):
         st.markdown('<div class="pc-warning"><b>🌱 Plant detected, but species identification is temporarily unavailable.</b><br>No plant name was guessed. Check the internet connection and press <b>ANALYZE IMAGE</b> again, or add the optional leaf/flower clues to get a conservative shortlist.</div>',unsafe_allow_html=True)
         health=result.get("health")
@@ -1728,10 +1802,12 @@ elif page=="Identify a Plant":
         top=result["rows"][0][0]
         st.success("🌱 PLANT PHOTO ACCEPTED")
         st.caption(f"Analysis engine: {result.get('model_note','')}")
+        if str(result.get("model_note", "")).startswith("Pl@ntNet"):
+            st.caption("Plant identification service based on the Pl@ntNet recognition API, regularly updated and accessible through https://my.plantnet.org/ . Your uploaded photo is sent to that service for identification when the API key is configured.")
         if result.get("model_error"):
             st.warning("The main vision model could not be loaded, so this result is only a local shortlist. Check the internet connection and try Analyze again.")
         st.markdown(f'<div class="pc-result"><div style="font-size:.78rem;font-weight:900;color:#64766b;text-transform:uppercase;letter-spacing:.08em">TOP PLANT MATCH</div><div class="pc-result-name">🌿 {top["common_name"]}</div><div class="pc-scientific"><b>Common name:</b> {top["common_name"]} &nbsp; · &nbsp; <i>{top["scientific_name"]}</i> · {top["family"]}</div><div class="pc-badge">{result["label"]} · {result["conf"]}% visual-match score</div></div>',unsafe_allow_html=True)
-        if result["label"] in ["Possible match","Needs confirmation"]:
+        if result["label"] in ["Possible match","Needs confirmation"] or "confirm visually" in result["label"]:
             st.markdown('<div class="pc-warning"><b>Confirm before relying on the name:</b> visually similar plants can look alike. Use the alternatives and the reference photo below.</div>',unsafe_allow_html=True)
         score_value=int(result.get("conf",50))
         st.markdown(f'<div class="pc-score"><div class="pc-score-ring">{score_value}</div><div class="pc-score-copy"><div class="pc-score-title">Identification confidence band</div><div class="pc-score-sub">This is a visual-match band, not a calibrated probability. Compare the plant profile and alternatives when the band is not strong.</div></div></div>',unsafe_allow_html=True)
@@ -1909,7 +1985,7 @@ elif page=="Search":
                     st.session_state.selected_plant=p["common_name"]; st.rerun()
 
 elif page=="My Plants":
-    st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">❤️ My Plants</h1><div class="pc-author">🌿 Made by Aradhy Mundhe</div><p>Add your plants directly and create reminders for watering, fertilizer, sunlight, pest checks and other care tasks.</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-hero" style="padding:27px 30px"><h1 style="font-size:2.35rem">❤️ My Plants</h1><p>Add your plants directly and create reminders for watering, fertilizer, sunlight, pest checks and other care tasks.</p></div>',unsafe_allow_html=True)
     render_due_reminder_alerts()
     now=india_now_naive()
     st.markdown("### ➕ Add a plant to My Plants")
@@ -1992,27 +2068,33 @@ elif page=="Plant Health Copilot":
     with st.form("health_copilot_form_v1"):
         plant_name = st.selectbox("Which plant are you checking?", [p["common_name"] for p in PLANTS], key="copilot_plant_v1")
         symptoms = st.multiselect(
-            "What have you observed?",
+            "What have you observed? (Select all that apply)",
             [
-                "Yellowing leaves",
-                "Brown or crispy edges",
-                "Wilting",
-                "Spots or powder on leaves",
-                "Sticky residue or webbing",
-                "Slow or stunted growth",
-                "Soft or foul-smelling soil",
+                "Yellowing leaves", "Brown or crispy edges", "Wilting",
+                "Spots or powder on leaves", "Sticky residue or webbing",
+                "Slow or stunted growth", "Soft or foul-smelling soil",
+                "Holes or chewed leaves", "Curled or distorted new leaves",
+                "Leaf drop", "Leggy growth", "Mold on soil surface",
+                "Black or soft stem tissue",
             ],
-            key="copilot_symptoms_v1",
+            key="copilot_symptoms_v2",
         )
         col1, col2 = st.columns(2)
         with col1:
-            soil_state = st.selectbox("Soil moisture (check physically)", ["Not checked", "Dry", "Moist", "Wet / soggy"], key="copilot_soil_v1")
-            drainage_state = st.selectbox("Drainage", ["Not sure", "Good", "Poor"], key="copilot_drainage_v1")
+            soil_state = st.selectbox("Soil moisture (check physically)", ["Not checked", "Dry", "Moist", "Wet / soggy"], key="copilot_soil_v2")
+            watering_frequency = st.selectbox("How often do you water?", ["Not sure", "Daily", "Every 2–3 days", "About weekly", "Less than weekly", "Only when soil feels dry"], key="copilot_frequency_v2")
+            drainage_state = st.selectbox("Water drainage", ["Not sure", "Good", "Poor"], key="copilot_drainage_v2")
+            pot_drainage = st.selectbox("Does the pot have drainage holes?", ["Not sure", "Yes", "No drainage holes"], key="copilot_potdrain_v2")
         with col2:
-            light_state = st.selectbox("Current light", ["Not sure", "Low light", "Bright indirect light", "Strong direct sun"], key="copilot_light_v1")
-            recent_change = st.selectbox("Recent change", ["None known", "Moved location", "Changed watering", "Repotted", "Added fertilizer", "Weather / temperature changed"], key="copilot_change_v1")
-        notes = st.text_area("Extra observations (optional)", placeholder="Example: older leaves are yellow, new growth looks normal…", max_chars=1000, key="copilot_notes_v1")
-        submitted = st.form_submit_button("Assess observations", type="primary", use_container_width=True)
+            light_state = st.selectbox("Current light", ["Not sure", "Low light", "Bright indirect light", "Strong direct sun"], key="copilot_light_v2")
+            plant_location = st.selectbox("Where is the plant?", ["Not sure", "Indoors", "Outdoors", "Balcony / windowsill", "Greenhouse"], key="copilot_location_v2")
+            symptom_location = st.selectbox("Where do symptoms appear first?", ["Not sure", "Mostly older/lower leaves", "Mostly new/upper growth", "Across the whole plant", "One branch or one side"], key="copilot_symptom_location_v2")
+            symptom_duration = st.selectbox("How quickly did it develop?", ["Not sure", "Gradually over weeks", "Over 1–2 weeks", "Spreading quickly (1–3 days)"], key="copilot_duration_v2")
+        recent_change = st.selectbox("Recent change", ["None known", "Moved location", "Changed watering", "Repotted", "Added fertilizer", "Pesticide / cleaning spray exposure", "Weather / temperature changed", "New plant nearby"], key="copilot_change_v2")
+        pest_seen = st.selectbox("Have you physically seen pests?", ["Not checked", "No visible pests", "Yes, visible"], key="copilot_pests_v2")
+        notes = st.text_area("Extra observations (optional)", placeholder="Describe which leaves are affected, spots or insects you can see, smell, recent watering, and whether symptoms are spreading…", max_chars=1000, key="copilot_notes_v2")
+        symptom_photo = st.file_uploader("Optional close-up symptom photo", type=["jpg", "jpeg", "png", "webp"], key="copilot_photo_v2")
+        submitted = st.form_submit_button("Build my care action plan", type="primary", use_container_width=True)
     if submitted:
         plant = PLANT_BY_NAME[plant_name]
         assessment = assess_plant_health(
@@ -2023,7 +2105,20 @@ elif page=="Plant Health Copilot":
             drainage_state=drainage_state,
             recent_change=recent_change,
             notes=notes,
+            watering_frequency=watering_frequency,
+            pot_drainage=pot_drainage,
+            symptom_location=symptom_location,
+            symptom_duration=symptom_duration,
+            plant_location=plant_location,
+            pest_seen=pest_seen,
         )
+        if symptom_photo is not None:
+            try:
+                photo_image = ImageOps.exif_transpose(Image.open(io.BytesIO(symptom_photo.getvalue()))).convert("RGB")
+                visual_screen = visual_health_screen(photo_image)
+                assessment["photo_screen"] = visual_screen
+            except Exception:
+                assessment["photo_screen"] = {"status": "Photo could not be analysed", "level": "Not available"}
         assessment["created_at"] = india_now_naive().isoformat(timespec="minutes")
         st.session_state.health_copilot_assessment = assessment
         st.session_state.plant_journal.append({
@@ -2036,6 +2131,10 @@ elif page=="Plant Health Copilot":
     assessment = st.session_state.get("health_copilot_assessment")
     if assessment:
         st.markdown("### Assessment summary")
+        if assessment.get("priority") == "Prompt inspection recommended":
+            st.warning("**Priority:** Prompt inspection recommended. Review the first action in the plan today; this is not a confirmed diagnosis.")
+        else:
+            st.info("**Priority:** Routine observation and care checks. Reassess if symptoms worsen or spread.")
         st.markdown(
             f'<div class="pc-result"><div class="pc-result-name" style="font-size:1.45rem">{assessment["plant"]}</div>'
             f'<div class="pc-scientific"><i>{assessment["scientific_name"]}</i></div>'
@@ -2050,6 +2149,16 @@ elif page=="Plant Health Copilot":
         st.markdown("#### Practical next-step plan")
         for action in assessment["action_plan"]:
             st.markdown(f"- {action}")
+        if assessment.get("photo_screen"):
+            photo_screen = assessment["photo_screen"]
+            st.markdown("#### Optional photo screen")
+            st.info(f"Visual screen: {photo_screen.get('level', 'Not available')} — {photo_screen.get('status', 'No visual result available')}. This is a visual flag only, not a disease diagnosis.")
+        with st.expander("Review the observations used"):
+            st.json(assessment.get("observations", {}))
+        st.markdown("#### What to do next")
+        st.write("1. Do the physical checks above before adding fertilizer or pesticide.")
+        st.write("2. Change one growing condition at a time where possible, so you can tell what helped.")
+        st.write("3. Photograph the same area again in 3–7 days and compare whether symptoms are spreading.")
         if assessment.get("notes"):
             st.markdown("**Your notes:**")
             st.write(assessment["notes"])
@@ -2085,7 +2194,7 @@ elif page=="About":
     with about_right:
         st.markdown('<div class="pc-card"><h3>Project Information</h3><p><b>Project Name:</b> PlantCare AI<br><b>Developed by:</b> Aradhy Mundhe<br><b>Technologies:</b> Python, Streamlit, PyTorch, OpenCLIP, BioCLIP<br><b>Total Plant Species:</b> 56<br><b>Deployment:</b> Streamlit Community Cloud<br><b>Live Website:</b> <a href="https://plantcareai-kznq8jblfdsk3u5jvsw9rt.streamlit.app" target="_blank">Open PlantCare AI</a></p></div>',unsafe_allow_html=True)
         st.markdown('<div class="pc-card" style="display:flex;align-items:center;gap:22px;flex-wrap:wrap"><img class="pc-about-qr" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZoAAAGaAQAAAAAefbjOAAAC/klEQVR4nO2cQW7jMAxFP0cCsrSBHKBHka/WI+UG9lFygAHkZQEZfxYUHbuzSlvYqU0vhLj2QySEIPlJqUI8fQ1/nmcAhxxyyCGHHHLomJDUK0K6UUSkBUTaSUTaSYDRXuh2mZ5D20OJJJkBoCn6J/J+IXmPABBIklxD203Poe2hsToA9mMEmScx2wiUDoCIxP2m59BmUPx0L0AowNhC0PyNBABi3Gt6Du0OsW8+BBomMiAd6vDj3+TQa0MNyR4A0j0CQwsd+N7WF0iW/abn0GZQjRqDAAACJN1CkZSvkHS/UFK+AsAk+0zPoc0htYhlKbspmjhweLNP6xdefk0OfQeCqsqUAfaoA1IOagPsGxIpB7JvSlWp/YuvyaHvQNVHDG0oSJwiqtYAkG4tBM0UiXESYnT1eQZIfQSZAfYI1ByT6hSonkH9BtxHnAKqUUO1hg2Y1SeSDTV+uEUcHao+oqYLs8sgLXHIK6OhW8TRIfu5AajMmH/9lTEUrUe4RRwfwsIf6K3JDL1SDpZluI84BbRSn5oplKo+VXPCZClzcIs4AbSIC5jzSVUY2hxHoIqQ5BZxCmhOJau0RGJZOwVzGXCtcQpIq06CJhODhPLpsQCBwDgJ0i0Wbj09h/aCkm6RqY1wrUIMb6U+GNpAe7rL9BzaQX0Gq0vZLXtY4ZIWSTxqnArSnGEQ21WX+CHSYRIRucxGs9v0HNoGmrvhkyDdWiDlq26tEzSZok/HKyRx8qhxAmhRoap9DcBUR8YsMwoeFU2PGoeGrEJlIlOzB64kqL5YtalbxMGhZWvr0cNYFLXnQoV3us4EPc50YVYdSCyQbowAxlj74vtMz6E9ogapEaK2tmzoAfMR9sl9xKGhRadr2dqyRHPxona/3CKODv13pisREOBiTuF2LQCmuDzY9eJrcujHodVZnkk0j8Bjx+VvXJNDT0JWiuC7iHY4RN6Kqk/psD7v90vW5NBXoNWuOlMY1RUgzHuxl10PzyMODYn/ZzKHHHLIIYcccuiL0D8b8JWmdpC6LAAAAABJRU5ErkJggg==" alt="QR code to open PlantCare AI"><div><h3>📱 Scan to open PlantCare AI</h3><p>Open your phone camera and point it at the QR code.</p><p><a href="https://plantcareai-kznq8jblfdsk3u5jvsw9rt.streamlit.app" target="_blank">plantcareai-kznq8jblfdsk3u5jvsw9rt.streamlit.app</a></p></div></div>',unsafe_allow_html=True)
-    st.markdown('<div class="pc-card"><h3>PlantCare AI — Made by Aradhy Mundhe</h3><p>This project was created by <b>Aradhy Mundhe</b> as a student project for plant identification, plant education and practical plant care.</p></div><div class="pc-card"><h3>What changed in this updated version?</h3><p>• Added a two-stage safety gate: general-object screening before plant species matching, followed by biological vision checks.<br>• Kept the offline-safe local visual screening so a model-loading problem does not crash the app.<br>• Reworked the sidebar into clear, large navigation buttons.<br>• Converted the interface to a consistent white-and-green theme.<br>• Added multi-view camera/gallery analysis, visual health screening, care requirements and clearer uncertainty messages.<br>• No OpenAI key, Gemini key or paid API is required.</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-card"><h3>PlantCare AI — Made by Aradhy Mundhe</h3><p>This project was created by <b>Aradhy Mundhe</b> as a student project for plant identification, plant education and practical plant care.</p></div><div class="pc-card"><h3>What changed in this updated version?</h3><p>• Added a two-stage safety gate: general-object screening before plant species matching, followed by biological vision checks.<br>• Kept the offline-safe local visual screening so a model-loading problem does not crash the app.<br>• Reworked the sidebar into clear, large navigation buttons.<br>• Converted the interface to a consistent white-and-green theme.<br>• Added multi-view camera/gallery analysis, visual health screening, care requirements and clearer uncertainty messages.<br>• Optional Pl@ntNet API support; local BioCLIP fallback remains available without its key.</p></div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-title">Sharing</div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-info"><b>For your teacher:</b> the easiest experience is a public hosted URL. A <code>localhost</code> address only works on the computer running PlantCare AI. The included launcher is for local use; online sharing requires deployment to a web host.</div>',unsafe_allow_html=True)
 
