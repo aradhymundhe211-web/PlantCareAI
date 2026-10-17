@@ -11,8 +11,8 @@ from zoneinfo import ZoneInfo
 import uuid
 from typing import Dict, List, Tuple
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from plantcare_core import assess_plant_health, validate_plant_records
-
 import numpy as np
 import requests
 import streamlit as st
