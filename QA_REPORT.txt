@@ -1,32 +1,43 @@
 PlantCare AI — QA and Fix Report
 
-Competition patch summary
-1. Fixed a false-rejection risk in the offline plant-presence fallback: it now accepts multiple plant-like patterns, including green foliage, flower-heavy yellow/red images, and mixed foliage/flower images. Color is used only for plant-presence screening, never to name a species.
-2. Relaxed the photo-quality minimum slightly so usable close-ups are less likely to be rejected prematurely.
-3. Made text/document rejection more conservative. A high local document score alone no longer rejects an image; stronger text-vs-plant model evidence is required. The independent general-object screen remains in place to reject obvious cars and other non-plant objects when its model is available.
-4. Removed the spoken Home-page introduction entirely. Written creator credits elsewhere remain unchanged.
-5. Added Plant Look-Alike Showdown: a single-session comparison of the top model candidates using the plant library's stored leaf, flower, growth and identification descriptions. These descriptions are explicitly labelled as reference traits, not proof that each trait was seen in the uploaded image.
-6. Updated README to match the current build.
+Project inspection
+- Entry point: app.py (Streamlit).
+- Plant library: plant_data.json, containing 56 records.
+- Dependencies: requirements.txt pins Streamlit 1.64.0, Pillow 11.3.0, NumPy 2.2.6, PyTorch 2.5.1, torchvision 0.20.1, open_clip_torch 2.31.0, and requests 2.32.5.
+- No model weights or labelled image test set are bundled in this ZIP. BioCLIP and the general-object model are loaded at runtime when available.
+- No explicit Python runtime pin is present in this ZIP. Existing source uses syntax requiring Python 3.10 or newer; preserve the currently working deployment runtime rather than guessing a new one.
 
-Checks performed on this package
-- Python syntax compilation: passed.
-- AST parsing: passed.
-- plant_data.json: parsed successfully; plant records checked for common names and expected structure.
-- Static checks: spoken introduction widget removed; Plant Look-Alike Showdown present; fallback and rejection threshold edits present.
-- ZIP integrity: checked after packaging.
+Updates in this build
+1. Added plantcare_core.py with data validation and a transparent, dependency-light Plant Health Copilot assessment engine.
+2. Added a Plant Health Copilot page to app.py. It asks about symptoms and growing conditions, presents possible causes and safe checks, and keeps an explicitly session-scoped journal.
+3. Added plant-library validation at app startup to catch missing required fields, duplicate names, or an unexpected record count.
+4. Added species-specific visual prompt hints for all 56 plant records. Tulsi and Mint now have more explicit botanical distinctions in their text prompt ensemble.
+5. Corrected the BioCLIP multi-view rank aggregation so it actually uses a modest contribution from the strongest view, matching the intended multi-view behavior.
+6. Added lightweight unit tests for library structure and Copilot logic.
+7. Preserved the existing app entry point, current requirements pins, plant data, Streamlit theme/configuration, and existing features.
 
-Not verified in this environment
-- A live Streamlit browser session was not launched here.
-- The BioCLIP and MobileNet model downloads/inference were not run end-to-end in this check.
-- No guarantee is made that every plant image will be identified correctly. The specific car, marigold and tulsi images should be tested on the deployed app before the competition.
-- A single photo cannot establish a definitive disease diagnosis or directly measure soil moisture, nutrient levels, root health or sunlight exposure.
+Checks run in this environment
+- Python AST/syntax parsing for app.py and plantcare_core.py: passed.
+- plant_data.json parsing and 56-record required-field/uniqueness validation: passed.
+- Static check: MODEL_HINTS contains all 56 library common names: passed.
+- `python -m unittest discover -s tests -v`: 8 tests passed.
+- ZIP integrity: to be checked after final packaging.
+
+Not verified here
+- Streamlit is not installed in the current execution environment, so a real Streamlit startup/browser smoke test could not be run.
+- open_clip_torch is not installed here, so BioCLIP inference, model downloads, and live image identification were not run.
+- No verified labelled photo set was included. The reported Toyota, Tulsi, Marigold, and Mango examples have not been re-tested against actual image files in this environment.
+- Adding prompts and multi-view score aggregation may improve matching but does not prove species-level accuracy. Do not claim perfect accuracy.
+- Plant Health Copilot does not diagnose disease. It is a rule-based checklist and cannot measure soil moisture, nutrient levels, root health, or confirm a pathogen.
+- The journal and reminders remain session-scoped; they are not guaranteed to persist after a refresh, session reset, or deployment restart.
 
 Competition test checklist
-- Test a clear car photo: it should be rejected as non-plant.
-- Test a clear marigold photo: it should proceed to plant matching rather than be rejected only because the photo is flower-heavy.
-- Test a clear tulsi photo: it should proceed to plant matching.
-- Test one non-plant object and one blurry/dark plant photo.
-- If model loading fails, check the visible error and use only the explicitly labelled fallback; do not claim full AI identification when BioCLIP is unavailable.
+1. Deploy and wait for the full Streamlit rebuild.
+2. Test a clear non-plant car photo; it should be rejected, but verify this on the hosted app.
+3. Test a clear Tulsi photo and compare Mint in the alternatives.
+4. Test a clear Marigold photo and a Mango photo.
+5. Test one blurry/dark plant image, one corrupted upload, and one ordinary non-plant object.
+6. Test the Plant Health Copilot with yellow leaves plus wet soil and with wilting plus dry soil.
+7. If the model cannot load, verify the app gives a clear fallback message rather than claiming full AI identification.
 
-Conclusion
-This patch reduces known false-rejection risks and adds a one-session look-alike comparison. It is statically checked, but it is not certified perfect; deploy and run the listed photo tests before the live judging session.
+This is a compatibility-conscious improvement, not a guarantee of winning a competition or error-free operation. Live deployment and real labelled-image testing remain necessary.
