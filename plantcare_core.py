@@ -55,6 +55,12 @@ def assess_plant_health(
     drainage_state: str = "Not sure",
     recent_change: str = "None known",
     notes: str = "",
+    watering_frequency: str = "Not sure",
+    pot_drainage: str = "Not sure",
+    symptom_location: str = "Not sure",
+    symptom_duration: str = "Not sure",
+    plant_location: str = "Not sure",
+    pest_seen: str = "Not checked",
 ) -> dict[str, Any]:
     """Generate cautious rule-based checks, not a plant disease diagnosis."""
     selected = {str(s).strip().casefold() for s in symptoms if str(s).strip()}
@@ -62,6 +68,12 @@ def assess_plant_health(
     light = light_state.casefold()
     drainage = drainage_state.casefold()
     change = recent_change.casefold()
+    frequency = watering_frequency.casefold()
+    pot_drainage_l = pot_drainage.casefold()
+    symptom_loc = symptom_location.casefold()
+    duration = symptom_duration.casefold()
+    plant_loc = plant_location.casefold()
+    pest_state = pest_seen.casefold()
     causes: list[dict[str, str]] = []
     actions: list[str] = []
 
@@ -100,6 +112,41 @@ def assess_plant_health(
     if "soft or foul-smelling soil" in selected:
         add("Possible waterlogging or root decay", "Persistently soggy, foul-smelling soil warrants checking drainage and root health.", "Pause routine watering until moisture is checked; seek experienced horticultural advice if roots are soft or decaying.")
 
+    if "holes or chewed leaves" in selected:
+        add("Possible chewing pests", "Irregular holes, missing leaf edges or fresh frass can be consistent with caterpillars, beetles or other chewing organisms.", "Inspect leaves at dusk and both leaf surfaces; photograph the pest or damage before choosing a treatment.")
+    if "curled or distorted new leaves" in selected:
+        add("Possible sap-feeding pests or environmental stress", "Distorted new growth can occur with aphids, mites, heat, water stress or chemical exposure.", "Inspect new growth and leaf undersides with good light; check for tiny insects before applying any product.")
+    if "leaf drop" in selected:
+        add("Recent environmental or root stress", "Leaf drop may follow abrupt light, temperature, watering or location changes and is not disease-specific.", "Compare recent care changes and check soil moisture and drainage before changing several conditions at once.")
+    if "leggy growth" in selected:
+        add("Insufficient light or normal growth habit", "Long, weak growth and widely spaced leaves can be associated with inadequate light, although species habits vary.", "Compare the current location with the plant's light profile and improve exposure gradually if needed.")
+    if "mold on soil surface" in selected:
+        add("Persistently moist surface or low airflow", "Surface mold can appear where organic material stays damp; it does not alone prove root disease.", "Let the surface dry as appropriate for this species, improve airflow, and check drainage without allowing a moisture-sensitive plant to desiccate.")
+    if "black or soft stem tissue" in selected:
+        add("Possible tissue decay or injury", "Soft, darkening tissue is a concerning sign but a photo or symptom label cannot identify the cause.", "Keep the plant separate from others, avoid wetting affected tissue, and seek local horticultural advice if the area is spreading.")
+
+    if pest_state == "yes, visible":
+        actions.append("Photograph the suspected pest close-up and inspect leaf undersides, stem joints and new growth; identify it before selecting a treatment.")
+    elif pest_state == "not checked":
+        actions.append("Inspect leaf undersides, stem joints and new growth for insects, eggs, sticky residue or fine webbing.")
+
+    if pot_drainage_l == "no drainage holes":
+        actions.append("A pot without drainage holes can trap water. If feasible, use a pot with drainage or an inner nursery pot; do not leave roots standing in water.")
+    if frequency == "daily":
+        actions.append("Daily watering can be too frequent for many plants. Check root-zone moisture and the species profile rather than watering by schedule alone.")
+    elif frequency == "less than weekly":
+        actions.append("Infrequent watering is not automatically wrong; compare actual root-zone moisture and this species' needs before changing frequency.")
+    if symptom_loc == "mostly older/lower leaves":
+        actions.append("Because symptoms are concentrated on older/lower leaves, check whether only a few oldest leaves are naturally ageing or whether the pattern is spreading.")
+    elif symptom_loc == "mostly new/upper growth":
+        actions.append("Because symptoms affect new growth, inspect it closely for pests, distortion and recent exposure changes.")
+    if plant_loc == "indoors":
+        actions.append("For an indoor plant, check distance from windows, air-conditioning/heater drafts and whether the pot sits in a water-filled cachepot.")
+    elif plant_loc == "outdoors":
+        actions.append("For an outdoor plant, note recent heat, heavy rain, wind, shade changes and possible spray drift from nearby gardening.")
+    if duration == "spreading quickly (1–3 days)":
+        actions.append("Rapidly spreading symptoms deserve prompt inspection; isolate the plant if a contagious pest or leaf issue is plausible and get local expert advice.")
+
     if soil == "wet / soggy":
         actions.append("Check drainage and moisture below the surface before the next watering; do not water just because the calendar says so.")
     elif soil == "dry":
@@ -125,6 +172,21 @@ def assess_plant_health(
             "safe_check": "Record visible symptoms and inspect soil, drainage, light, leaf undersides and recent care changes.",
         })
 
+    # Practical triage: flag when prompt local inspection is sensible, without
+    # asserting that a specific disease is present.
+    urgent_signs = (
+        "black or soft stem tissue" in selected
+        or "soft or foul-smelling soil" in selected
+        or duration == "spreading quickly (1–3 days)"
+    )
+    priority = (
+        "Prompt inspection recommended"
+        if urgent_signs
+        else "Routine observation and care checks"
+    )
+    if urgent_signs:
+        actions.insert(0, "Priority: inspect the affected area today. If symptoms are spreading, keep the plant separate from nearby plants where practical and seek local horticultural advice; this flag does not identify a disease.")
+
     if notes.strip():
         notes_summary = notes.strip()[:500]
     else:
@@ -133,8 +195,11 @@ def assess_plant_health(
         "plant": str(plant.get("common_name", "Unknown plant")),
         "scientific_name": str(plant.get("scientific_name", "")),
         "assessment_type": "Rule-based screening; not a confirmed diagnosis",
+        "priority": priority,
         "possible_causes": causes[:4],
         "action_plan": actions,
         "notes": notes_summary,
+        "observations": {"soil_moisture": soil_state, "watering_frequency": watering_frequency, "pot_drainage": pot_drainage, "light": light_state, "plant_location": plant_location, "symptom_location": symptom_location, "symptom_duration": symptom_duration, "pest_seen": pest_seen, "recent_change": recent_change},
         "disclaimer": "A text/image screening cannot confirm a pathogen, measure soil moisture or nutrient levels, or replace a qualified horticulturist's assessment.",
     }
+
