@@ -11,6 +11,8 @@ from zoneinfo import ZoneInfo
 import uuid
 from typing import Dict, List, Tuple
 
+from plantcare_core import assess_plant_health, validate_plant_records
+
 import numpy as np
 import requests
 import streamlit as st
@@ -410,6 +412,10 @@ def load_plants() -> List[dict]:
     return json.loads(DATA_FILE.read_text(encoding="utf-8"))
 
 PLANTS = load_plants()
+PLANT_DATA_ERRORS = validate_plant_records(PLANTS, expected_count=56)
+if PLANT_DATA_ERRORS:
+    # Keep the application from presenting a broken library as valid.
+    raise ValueError("Plant library validation failed: " + " ".join(PLANT_DATA_ERRORS))
 PLANT_BY_NAME = {p["common_name"]: p for p in PLANTS}
 
 
@@ -432,6 +438,11 @@ if "reminders" not in st.session_state:
     st.session_state.reminders = []
 if "notified_reminder_ids" not in st.session_state:
     st.session_state.notified_reminder_ids = set()
+if "health_copilot_assessment" not in st.session_state:
+    st.session_state.health_copilot_assessment = None
+if "plant_journal" not in st.session_state:
+    # Session-scoped by design; no claim of cross-session persistence.
+    st.session_state.plant_journal = []
 
 @st.fragment(run_every="10s")
 def render_due_reminder_alerts():
@@ -538,6 +549,25 @@ MODEL_HINTS = {
     "Amla": "amla, Phyllanthus emblica, small closely spaced leaves along branchlets and round fruit",
     "Coconut": "coconut palm, Cocos nucifera, tall palm trunk and long feather-like fronds",
     "Bamboo": "bamboo, Bambusa, tall segmented hollow-looking green culms and narrow leaves",
+    "ZZ Plant": "Zamioculcas zamiifolia, upright arching stems with thick glossy dark green oval leaflets",
+    "Heartleaf Philodendron": "Philodendron hederaceum, trailing vine with smooth heart-shaped leaves and pointed tips",
+    "Fiddle Leaf Fig": "Ficus lyrata, large violin-shaped leathery leaves with prominent pale veins",
+    "Lucky Bamboo": "Dracaena sanderiana, upright green segmented cane stems and narrow lance-shaped leaves",
+    "English Ivy": "Hedera helix, climbing or trailing vine with lobed angular leaves",
+    "Boston Fern": "Nephrolepis exaltata, arching feathery fronds with many small leaflets",
+    "Dracaena Marginata": "Dracaena marginata, narrow sword-like leaves in tufts atop thin woody canes",
+    "Calathea Orbifolia": "Goeppertia orbifolia, broad round green leaves with pale silvery stripes",
+    "Prayer Plant": "Maranta leuconeura, oval leaves with distinctive red veins and patterned green surfaces",
+    "Dieffenbachia": "Dieffenbachia seguine, broad oval leaves with cream or pale green variegated centers",
+    "Aglaonema": "Aglaonema commutatum, broad oval foliage often patterned silver, green or pink",
+    "Syngonium": "Syngonium podophyllum, arrowhead-shaped juvenile leaves on a climbing or trailing vine",
+    "Peperomia": "Peperomia obtusifolia, compact plant with thick glossy rounded oval leaves",
+    "Tradescantia Zebrina": "Tradescantia zebrina, trailing stems and pointed leaves with silver and purple stripes",
+    "Dwarf Schefflera": "Schefflera arboricola, palmate clusters of several oval leaflets radiating from one point",
+    "Bird of Paradise": "Strelitzia reginae, large paddle-shaped leaves and distinctive orange-blue bird-like flowers",
+    "Chrysanthemum": "Chrysanthemum morifolium, deeply lobed aromatic leaves and dense many-petaled flower heads",
+    "Tulsi": "Ocimum tenuiflorum holy basil, opposite ovate leaves with toothed edges, aromatic herb, often purple-green stems and slender flower spikes; distinguish from mint by basil-like flower spikes and leaf form",
+    "Mint": "Mentha spicata spearmint, opposite toothed leaves on spreading square stems, aromatic herb, narrow terminal flower spikes; distinguish from holy basil by leaf texture and growth habit",
 }
 
 @st.cache_resource(show_spinner=False)
@@ -560,13 +590,32 @@ def bioclip_text_features():
         scientific = str(p.get("scientific_name", "")).strip()
         hint = str(MODEL_HINTS.get(common, "")).strip()
         prompts = [
-            f"a photograph of {scientific}",
+            f"a photograph of the plant species {scientific}",
             f"a photograph of the plant {common}",
+            f"a close-up botanical photograph of {scientific}",
         ]
         if hint:
             prompts.append(f"a botanical photograph of {common}, showing {hint}")
         else:
-            prompts.append(f"a botanical photograph of {common}")
+            # Use available profile fields rather than an empty generic class prompt.
+            traits = ", ".join(
+                str(p.get(key, "")).strip()
+                for key in ("leaf", "flower", "growth")
+                if str(p.get(key, "")).strip()
+            )
+            prompts.append(f"a botanical photograph of {common}; identifying traits: {traits}")
+        # Explicitly contrast the most commonly confused herb pair without
+        # treating the prompt as proof; the model still needs image evidence.
+        if common == "Tulsi":
+            prompts.extend([
+                "holy basil Ocimum tenuiflorum, opposite ovate toothed leaves and slender flower spikes",
+                "holy basil plant, not spearmint, botanical close-up",
+            ])
+        elif common == "Mint":
+            prompts.extend([
+                "spearmint Mentha spicata, opposite serrated leaves and terminal flower spikes",
+                "spearmint plant, not holy basil, botanical close-up",
+            ])
         prompt_rows.append(prompts)
 
     # Encode in small batches so the 56-plant library remains memory-friendly.
@@ -794,12 +843,14 @@ def bioclip_rank(img: Image.Image, filename_hint: str = ""):
             f=model.encode_image(x); f=f/f.norm(dim=-1,keepdim=True)
             image_features.append(f)
         image_features=torch.cat(image_features,dim=0)
-        # Mean plus a small max-view contribution: this helps a leaf-rich crop matter
-        # when the original camera frame contains lots of background.
-        mean_feat=image_features.mean(dim=0,keepdim=True)
-        mean_feat=mean_feat/mean_feat.norm(dim=-1,keepdim=True)
-        mean_logits=(100.0*mean_feat@text_features.T).squeeze(0)
-        probs=torch.softmax(mean_logits,dim=0).cpu().numpy()
+        # Aggregate scores from the original image and focused crops. A modest
+        # max-view contribution lets a useful leaf/flower crop matter when the
+        # full frame contains background, without allowing one crop to dominate.
+        view_logits = 100.0 * (image_features @ text_features.T)
+        mean_logits = view_logits.mean(dim=0)
+        max_logits = view_logits.max(dim=0).values
+        combined_logits = 0.80 * mean_logits + 0.20 * max_logits
+        probs=torch.softmax(combined_logits,dim=0).cpu().numpy()
 
     order=np.argsort(-probs); candidate_idx=order[:8]
     rows=[]
@@ -1242,7 +1293,7 @@ def confidence_label(rows: List[Tuple[dict,float]]) -> Tuple[str,int]:
 # UI helpers
 
 # -----------------------------------------------------------------------------
-NAV=[("🏠","Home"),("📷","Identify a Plant"),("🌿","Plant Library"),("🔎","Search"),("❤️","My Plants"),("ℹ️","About")]
+NAV=[("🏠","Home"),("📷","Identify a Plant"),("🩺","Plant Health Copilot"),("🌿","Plant Library"),("🔎","Search"),("❤️","My Plants"),("ℹ️","About")]
 
 with st.sidebar:
     st.markdown('<div class="pc-brand"><div class="pc-logo"><svg viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="PlantCare AI logo"><circle cx="32" cy="32" r="29" fill="#f8ffe8" stroke="#9bce57" stroke-width="3"/><path d="M17 42 C16 24 29 14 47 13 C47 30 38 44 22 46 Z" fill="#168348"/><path d="M19 49 C26 37 33 29 43 20" fill="none" stroke="#eaf8bd" stroke-width="3" stroke-linecap="round"/><path d="M30 36 C28 29 25 25 20 23 C19 31 23 36 30 36 Z" fill="#9bd65d"/></svg></div><div><div class="pc-brand-title">PlantCare AI</div><div class="pc-brand-sub">Identify • Learn • Care</div></div></div>',unsafe_allow_html=True)
@@ -1503,6 +1554,10 @@ if page=="Home":
                 st.session_state.page=destination
                 st.session_state.analysis=None
                 st.rerun()
+    st.markdown('<div class="pc-card" style="margin-top:16px"><h3>🩺 New: Plant Health Copilot</h3><p>Report symptoms and growing conditions to receive a cautious, evidence-based checklist of possible causes and safe next steps. It does not claim to diagnose a disease from one photo.</p></div>',unsafe_allow_html=True)
+    if st.button("Open Plant Health Copilot →", key="home_copilot_open", type="primary"):
+        st.session_state.page = "Plant Health Copilot"
+        st.rerun()
     st.markdown('<div class="pc-info" style="margin-top:18px"><b>🌿 Our approach:</b> Helpful plant information with honest uncertainty. Photo-based suggestions are guidance, not a guaranteed botanical diagnosis.</div>',unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
@@ -1921,6 +1976,105 @@ elif page=="My Plants":
                         if when<now: st.warning("Choose a future date/time for a new reminder.")
                         else:
                             st.session_state.reminders.append({"id":str(uuid.uuid4()),"plant":p["common_name"],"task":final_task,"when":when.isoformat(timespec="minutes"),"repeat":repeat,"notes":notes.strip(),"done":False}); st.success("Reminder added."); st.rerun()
+
+elif page=="Plant Health Copilot":
+    st.markdown(
+        '<div class="pc-hero" style="padding:27px 30px">'
+        '<h1 style="font-size:2.35rem">🩺 Plant Health Copilot</h1>'
+        '<p>Describe what you observe and check growing conditions. Get a transparent checklist of possible causes and safe next steps—not an unsupported disease diagnosis.</p>'
+        '<div class="pc-pills"><span class="pc-pill">Evidence-first</span><span class="pc-pill">No paid AI API required</span><span class="pc-pill">Honest uncertainty</span></div></div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="pc-info"><b>How it works:</b> This version uses a transparent rule-based checklist. It cannot confirm pathogens, measure soil moisture, or replace an experienced horticulturist. The selected plant profile supplies general care context.</div>',
+        unsafe_allow_html=True,
+    )
+    with st.form("health_copilot_form_v1"):
+        plant_name = st.selectbox("Which plant are you checking?", [p["common_name"] for p in PLANTS], key="copilot_plant_v1")
+        symptoms = st.multiselect(
+            "What have you observed?",
+            [
+                "Yellowing leaves",
+                "Brown or crispy edges",
+                "Wilting",
+                "Spots or powder on leaves",
+                "Sticky residue or webbing",
+                "Slow or stunted growth",
+                "Soft or foul-smelling soil",
+            ],
+            key="copilot_symptoms_v1",
+        )
+        col1, col2 = st.columns(2)
+        with col1:
+            soil_state = st.selectbox("Soil moisture (check physically)", ["Not checked", "Dry", "Moist", "Wet / soggy"], key="copilot_soil_v1")
+            drainage_state = st.selectbox("Drainage", ["Not sure", "Good", "Poor"], key="copilot_drainage_v1")
+        with col2:
+            light_state = st.selectbox("Current light", ["Not sure", "Low light", "Bright indirect light", "Strong direct sun"], key="copilot_light_v1")
+            recent_change = st.selectbox("Recent change", ["None known", "Moved location", "Changed watering", "Repotted", "Added fertilizer", "Weather / temperature changed"], key="copilot_change_v1")
+        notes = st.text_area("Extra observations (optional)", placeholder="Example: older leaves are yellow, new growth looks normal…", max_chars=1000, key="copilot_notes_v1")
+        submitted = st.form_submit_button("Assess observations", type="primary", use_container_width=True)
+    if submitted:
+        plant = PLANT_BY_NAME[plant_name]
+        assessment = assess_plant_health(
+            plant,
+            symptoms,
+            soil_state=soil_state,
+            light_state=light_state,
+            drainage_state=drainage_state,
+            recent_change=recent_change,
+            notes=notes,
+        )
+        assessment["created_at"] = india_now_naive().isoformat(timespec="minutes")
+        st.session_state.health_copilot_assessment = assessment
+        st.session_state.plant_journal.append({
+            "created_at": assessment["created_at"],
+            "plant": plant_name,
+            "entry_type": "Health check",
+            "summary": ", ".join(symptoms) if symptoms else "General care check",
+            "notes": notes.strip()[:500],
+        })
+    assessment = st.session_state.get("health_copilot_assessment")
+    if assessment:
+        st.markdown("### Assessment summary")
+        st.markdown(
+            f'<div class="pc-result"><div class="pc-result-name" style="font-size:1.45rem">{assessment["plant"]}</div>'
+            f'<div class="pc-scientific"><i>{assessment["scientific_name"]}</i></div>'
+            f'<div class="pc-badge">{assessment["assessment_type"]}</div></div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown("#### Possible causes to investigate")
+        for idx, cause in enumerate(assessment["possible_causes"], start=1):
+            with st.expander(f"{idx}. {cause['possible_cause']}", expanded=(idx == 1)):
+                st.write("**Why consider it:**", cause["why_consider_it"])
+                st.write("**Safe check:**", cause["safe_check"])
+        st.markdown("#### Practical next-step plan")
+        for action in assessment["action_plan"]:
+            st.markdown(f"- {action}")
+        if assessment.get("notes"):
+            st.markdown("**Your notes:**")
+            st.write(assessment["notes"])
+        st.warning(assessment["disclaimer"])
+        plant = PLANT_BY_NAME.get(assessment["plant"])
+        if plant:
+            with st.expander("View this plant's reference care profile"):
+                st.write("**Water:**", plant.get("water", "See plant profile."))
+                st.write("**Light:**", plant.get("light", "See plant profile."))
+                st.write("**Soil:**", plant.get("soil", "See plant profile."))
+                st.write("**Common problems to monitor:**", plant.get("pests", "See plant profile."), plant.get("diseases", "See plant profile."))
+    st.markdown("### 🗒️ Plant journal")
+    st.caption("Journal entries are stored only in this browser session in the current version. They are not guaranteed to survive a refresh, new session, or deployment restart.")
+    journal = st.session_state.get("plant_journal", [])
+    if journal:
+        for entry in reversed(journal[-10:]):
+            with st.expander(f"{entry['created_at']} · {entry['plant']} · {entry['entry_type']}"):
+                st.write("**Observation:**", entry["summary"])
+                if entry.get("notes"):
+                    st.write("**Notes:**", entry["notes"])
+        if st.button("Clear session journal", key="clear_copilot_journal_v1"):
+            st.session_state.plant_journal = []
+            st.rerun()
+    else:
+        st.info("No journal entries yet. Complete an assessment to create the first entry.")
 
 elif page=="About":
     st.markdown('<div class="pc-reference-banner"><div class="pc-ref-logo"><svg viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="PlantCare AI logo"><circle cx="32" cy="32" r="29" fill="#f8ffe8" stroke="#9bce57" stroke-width="3"/><path d="M17 42 C16 24 29 14 47 13 C47 30 38 44 22 46 Z" fill="#168348"/><path d="M19 49 C26 37 33 29 43 20" fill="none" stroke="#eaf8bd" stroke-width="3" stroke-linecap="round"/><path d="M30 36 C28 29 25 25 20 23 C19 31 23 36 30 36 Z" fill="#9bd65d"/></svg></div><div><h2>🌿 About PlantCare AI</h2><p>Bringing nature and technology together for a greener world.</p></div></div>',unsafe_allow_html=True)
