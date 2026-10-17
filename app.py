@@ -12,8 +12,12 @@ from zoneinfo import ZoneInfo
 import uuid
 from typing import Dict, List, Tuple
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+APP_DIR = Path(__file__).resolve().parent
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
+
 from plantcare_core import assess_plant_health, validate_plant_records
+
 import numpy as np
 import requests
 import streamlit as st
@@ -2149,3 +2153,4 @@ elif page=="About":
     st.markdown('<div class="pc-info"><b>For your teacher:</b> the easiest experience is a public hosted URL. A <code>localhost</code> address only works on the computer running PlantCare AI. The included launcher is for local use; online sharing requires deployment to a web host.</div>',unsafe_allow_html=True)
 
 st.markdown('<div class="pc-footer">PlantCare AI • Made by Aradhy Mundhe • Identify • Learn • Care</div>',unsafe_allow_html=True)
+
