@@ -713,9 +713,12 @@ def general_object_screen(img_bytes: bytes):
         reject=bool(
             hard_hits and
             (
-                (top1 in {n for n,_ in hard_hits} and top1_score >= 0.18 and plant_max < 0.18) or
-                (hard_max >= 0.28 and hard_max >= plant_max * 1.35) or
-                (hard_max >= 0.42)
+                # Potted plants often trigger ImageNet labels such as vase or pot.
+                # Reject only when object evidence is strong and no plant-like label
+                # competes with it; a weak generic object guess is not enough.
+                (top1 in {n for n,_ in hard_hits} and top1_score >= 0.32 and plant_max < 0.12) or
+                (hard_max >= 0.40 and hard_max >= plant_max * 1.60) or
+                (hard_max >= 0.58 and plant_max < 0.20)
             )
         )
         reason=f"General vision screening recognized a non-plant object ({top1})." if reject else ""
@@ -793,11 +796,15 @@ def vision_gate(img: Image.Image):
         return True,max(0,min(1,.5+margin/20)),"Plant presence is ambiguous; continue to species-level verification",{"gate":"deferred_to_species_check","margin":margin,"local_features":local_features}
     except Exception:
         # Fail closed rather than guessing a species from color alone.
-        strong_local=(local_features.get("leafy_green_ratio",0)>=.16 and local_features.get("edge",0)>=.11 and local_features.get("green_ratio",0)>=.10)
+        strong_local=(local_features.get("leafy_green_ratio",0)>=.16 and local_features.get("edge",0)>=.08 and local_features.get("green_ratio",0)>=.06)
         doc_score=_document_visual_score(img)
-        if doc_score>=.65 or not strong_local:
-            return False,doc_score,"The image could not be verified as a plant with enough confidence",{"gate":"strict_local_fallback","document_score":doc_score}
-        return True,local_score,"Strong plant-like foliage detected",{"gate":"strict_local_fallback","document_score":doc_score}
+        # When the model checkpoint cannot download/load, do not reject all plants.
+        # Continue only if the independent local image heuristic finds plant-like
+        # color/texture, and still reject document-heavy images. Species confidence
+        # is handled separately and must remain explicitly uncertain.
+        if doc_score>=.78 or not local_is_plant:
+            return False,doc_score,"The image could not be verified as a plant with enough confidence",{"gate":"local_fallback","document_score":doc_score}
+        return True,local_score,"Plant-like visual features detected; species result may need confirmation",{"gate":"local_fallback","document_score":doc_score,"strong_local":strong_local}
 
 
 # -----------------------------------------------------------------------------
