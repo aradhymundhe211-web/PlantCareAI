@@ -12,12 +12,12 @@ Key features
 - Visual leaf-colour screening (not a confirmed disease diagnosis)
 - Single-photo care guidance and plant-profile information
 - My Plants and reminders with an explicit 12-hour AM/PM time selector
-- Local BioCLIP fallback works without an API key; optional Pl@ntNet API is used first when configured
+- Local BioCLIP fallback works without an API key; optional optional external API is used first when configured
 
 Optional higher-recall plant identification (recommended for deployment)
 1. Create an account and obtain a private API key at https://my.plantnet.org/ . Check current quota and terms before sharing the app publicly.
 2. In Streamlit Community Cloud, open your app settings and add this under the Secrets section:
-   PLANTNET_API_KEY = "paste-your-private-key-here"
+    = "paste-your-private-key-here"
 3. Do not put the key in app.py, plantnet_client.py, a public GitHub file, or a screenshot. Keep it in Streamlit Secrets.
 4. Commit/push the code and reboot the Streamlit app. When configured, Pl@ntNet is tried first. Results are mapped to the 56-plant library only by exact scientific-name match; otherwise the local classifier is used as a fallback.
 5. The documented free allowance is up to 500 identification requests per day, subject to account quota and terms. Each identification sends the selected image to Pl@ntNet.
@@ -44,3 +44,6 @@ Plant Health Copilot uses transparent rules, not a trained disease detector. Its
 Run the lightweight project checks from the repository root with: `python -m unittest discover -s tests -v`.
 
 See QA_REPORT.txt for checks performed and limitations that remain.
+
+
+Identification notes (2026-10-17): The app uses BioCLIP 2 with original BioCLIP fallback and multi-view image ranking across the 56 configured library classes. The model weights are downloaded from Hugging Face at runtime and require internet access on first load. The app is not fully offline and no model guarantees perfect identification. If model loading fails, the UI should show identification temporarily unavailable rather than claiming no plant was detected.
