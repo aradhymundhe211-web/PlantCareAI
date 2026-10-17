@@ -940,17 +940,19 @@ def vision_gate(img: Image.Image):
             cps,cts,ctx_margin,doc_score=bioclip_context_screen(img)
         except Exception:
             cps,cts,ctx_margin,doc_score=plant_score,0.0,plant_score,_document_visual_score(img)
-        if cts>=32.0 and ctx_margin<=-2.5:
+        if (cts>=29.0 and ctx_margin<=-1.5) or (doc_score>=.70 and ctx_margin<3.0):
             return False,doc_score,"The image appears to contain mostly text or document content",{"gate":"document_screen","document_score":doc_score}
         if object_score>=29.0 and margin<=-3.5:
             return False,max(0,min(1,object_score/100)),"The photo appears to show an object rather than a plant",{"gate":"bioclip_object","margin":margin}
         if clip_is_plant and margin>=2.0:
             return True,max(0,min(1,.5+margin/20)),"Plant-like imagery detected",{"gate":"bioclip_ensemble","margin":margin}
-        # Fallback foliage must be reasonably strong, not merely green-colored.
-        strong_local=(local_features.get("leafy_green_ratio",0)>=.13 and local_features.get("edge",0)>=.10 and local_features.get("green_ratio",0)>=.08)
-        if strong_local:
-            return True,local_score,"Plant-like foliage detected",{"gate":"strong_local_foliage","margin":margin}
-        return False,max(0,min(1,.5+margin/20)),"The image does not contain enough reliable plant evidence",{"gate":"conservative_reject","margin":margin}
+        # Do not reject a photo solely because the broad plant-vs-object prompt
+        # ensemble is uncertain. Flowers, close-up leaves, warm lighting and busy
+        # backgrounds can make this generic gate ambiguous. The main BioCLIP
+        # species ranking runs next, and the independent general-object / strong
+        # object screens still reject clear cars and other ordinary objects.
+        # This gate should reject only decisive object/document evidence.
+        return True,max(0,min(1,.5+margin/20)),"Plant presence is ambiguous; continue to species-level verification",{"gate":"deferred_to_species_check","margin":margin,"local_features":local_features}
     except Exception:
         # Fail closed rather than guessing a species from color alone.
         strong_local=(local_features.get("leafy_green_ratio",0)>=.16 and local_features.get("edge",0)>=.11 and local_features.get("green_ratio",0)>=.10)
@@ -1015,22 +1017,7 @@ def plant_gate(img: Image.Image) -> Tuple[bool,float,str,dict]:
     # The fallback gate is intentionally permissive for real plants; the
     # species model and the explicit non-plant check are responsible for the
     # final decision when available. This avoids rejecting warm-lit mango/tulsi.
-    # Accept several botanical visual patterns, not just green foliage. A close-up
-    # of a marigold or other flower may contain little green; a tulsi photo may be
-    # warm-lit or partly shadowed. Color alone is never used to name a species,
-    # but color + visible texture/edges can pass the presence screen to BioCLIP.
-    foliage_signal = (
-        f["green_ratio"] >= .025 and f["sat"] >= .12
-    ) or f["leafy_green_ratio"] >= .018
-    flower_signal = (
-        f["yellow_ratio"] >= .035 or f["red_ratio"] >= .035
-    ) and f["sat"] >= .22 and f["edge"] >= .035
-    mixed_plant_signal = (
-        (f["green_ratio"] >= .015 or f["leafy_green_ratio"] >= .012)
-        and (f["yellow_ratio"] + f["red_ratio"] >= .018)
-        and f["edge"] >= .025
-    )
-    is_plant = bool(foliage_signal or flower_signal or mixed_plant_signal)
+    is_plant=(f["green_ratio"] >= .045 and f["sat"] >= .16) or (f["leafy_green_ratio"] >= .025) or (f["green_ratio"] >= .025 and f["yellow_ratio"] >= .08 and f["sat"] >= .30) or (f["red_ratio"] >= .08 and f["sat"] >= .25 and f["edge"] >= .08)
     reason="Plant-like vegetation/color/texture detected" if is_plant else "The photo does not contain enough plant-like visual evidence"
     return is_plant,score,reason,f
 
@@ -1071,91 +1058,137 @@ def identify_locally(img: Image.Image, clues: List[str]) -> List[Tuple[dict,floa
 
 
 def visual_health_screen(img: Image.Image) -> dict:
-    """Screen visible foliage for stress cues. This is not a disease diagnosis."""
-    focus=_focus_crop(img) or ImageOps.exif_transpose(img).convert("RGB")
-    small=focus.copy(); small.thumbnail((500,500))
-    a=np.asarray(small,dtype=np.float32)/255.0
-    r,g,b=a[...,0],a[...,1],a[...,2]
-    mx=a.max(axis=2); mn=a.min(axis=2); sat=np.divide(mx-mn,mx,out=np.zeros_like(mx),where=mx>1e-6)
-    green=(g>r*.94)&(g>b*1.04)&(g>.14)&(sat>.10)
-    yellow=(r>.38)&(g>.32)&(b<.40)&(r>b*1.10)&(sat>.16)
-    brown=(r>.20)&(g>.10)&(g<r*.78)&(b<g*.95)&(sat>.16)
-    dark=(mx<.18)
-    # Include saturated dark pixels in the candidate foliage mask. In the old
-    # code dark pixels were excluded from `foliage`, so dark_f was always zero.
-    # This remains a coarse visual screen, not a leaf segmentation or diagnosis.
-    foliage=green|yellow|brown|dark
-    area=max(float(foliage.mean()),.001)
-    yellow_f=float((yellow&foliage).mean()/area)
-    brown_f=float((brown&foliage).mean()/area)
-    dark_f=float((dark&foliage).mean()/area)
-    green_f=float((green&foliage).mean()/area)
-    if brown_f>=.16 or dark_f>=.12:
-        status="Possible visible leaf damage / stress signs"; level="Review closely"
-    elif yellow_f>=.20:
-        status="Possible yellowing / stress signs"; level="Monitor"
+    """Screen approximate colour patterns only; this is not leaf segmentation or diagnosis."""
+    focus = _focus_crop(img) or ImageOps.exif_transpose(img).convert("RGB")
+    small = focus.copy()
+    small.thumbnail((500, 500))
+    a = np.asarray(small, dtype=np.float32) / 255.0
+    r, g, b = a[..., 0], a[..., 1], a[..., 2]
+    mx = a.max(axis=2)
+    sat = np.divide(mx - a.min(axis=2), mx, out=np.zeros_like(mx), where=mx > 1e-6)
+
+    # These masks describe rough colour families, not individual leaves.
+    # Flowers, soil, shadows and backgrounds can resemble these colours.
+    green = (g > r * .94) & (g > b * 1.04) & (g > .14) & (sat > .10)
+    yellow = (r > .38) & (g > .32) & (b < .40) & (r > b * 1.10) & (sat > .16)
+    brown = (r > .20) & (g > .10) & (g < r * .78) & (b < g * .95) & (sat > .16)
+    colour_mask = green | yellow | brown
+    coverage = float(colour_mask.mean())
+
+    # If the photo contains too little plant-like colour, don't manufacture
+    # percentages or imply that the plant has been assessed.
+    if coverage < .025:
+        return {
+            "status": "Unable to assess: too little plant-like colour is visible",
+            "level": "Unable to assess",
+            "green": 0.0, "yellow": 0.0, "brown": 0.0, "dark": 0.0,
+            "screenable": False, "colour_coverage": coverage,
+            "focus_used": focus is not img,
+        }
+
+    area = max(float(colour_mask.sum()), 1.0)
+    green_f = float((green & colour_mask).sum() / area)
+    yellow_f = float((yellow & colour_mask).sum() / area)
+    brown_f = float((brown & colour_mask).sum() / area)
+
+    # Alerts refer only to colour patterns; they are not diagnoses.
+    if brown_f >= .16:
+        status = "Brown-toned pixels detected; inspect leaves directly"
+        level = "Review visible colours"
+    elif yellow_f >= .20:
+        status = "Yellow-toned pixels detected; inspect leaves directly"
+        level = "Review visible colours"
     else:
-        status="No strong colour-stress signal detected in this photo"; level="No obvious visual stress signal"
-    return {"status":status,"level":level,"green":green_f,"yellow":yellow_f,"brown":brown_f,"dark":dark_f,"focus_used":focus is not img}
+        status = "No strong yellow/brown colour pattern detected"
+        level = "No obvious colour warning"
+    return {
+        "status": status, "level": level,
+        "green": green_f, "yellow": yellow_f, "brown": brown_f, "dark": 0.0,
+        "screenable": True, "colour_coverage": coverage,
+        "focus_used": focus is not img,
+    }
 
 
 def health_issue_text(p: dict, health: dict) -> str:
-    if "damage" in health["status"].lower():
-        return "Inspect the leaves for spots, rot, pests or physical damage. The plant profile lists these diseases/pests to watch for: " + str(p.get("diseases","Check the plant profile for common diseases."))
-    if "yellowing" in health["status"].lower():
-        return "Check soil moisture, drainage, light and pests before changing the watering routine. Yellowing has several possible causes."
-    return "No obvious stress pattern was detected in this photo; continue normal monitoring and use the species care profile below."
+    if not health.get("screenable", True):
+        return "There is not enough clearly screenable plant-like colour in this photo. Take a closer, well-lit photo of the leaves. This screen cannot reliably assess the current image."
+    status = str(health.get("status", "")).lower()
+    if "brown-toned" in status:
+        return ("Brown-toned pixels can come from mature tissue, flowers, soil, shadows or damage. "
+                "Inspect the leaves themselves for spots, rot, pests or physical injury before taking action. "
+                "Plant-profile problems are possibilities to investigate, not diagnoses: " +
+                str(p.get("diseases", "Check the plant profile for common diseases.")))
+    if "yellow-toned" in status:
+        return ("Yellow-toned pixels can be flowers, lighting or leaves. If the leaves themselves are yellowing, "
+                "check soil moisture, drainage, light and pests; colour alone cannot identify the cause.")
+    return ("No strong yellow/brown colour pattern was detected in the screenable pixels. "
+            "This does not prove the plant is healthy; continue monitoring and use the species care profile.")
 
 
 def care_assessment(img: Image.Image, p: dict, health: dict) -> dict:
-    """Turn visible image evidence + the species profile into safe care guidance.
+    """Give cautious care prompts; a photograph cannot measure growing conditions."""
+    if not health.get("screenable", True):
+        return {
+            "water_status": "Check soil physically",
+            "water_detail": "The photo is not sufficient for colour screening. Feel the soil and check drainage before watering.",
+            "fertilizer_status": "Not measurable from photo",
+            "fertilizer_detail": "A photo cannot measure nutrient levels. Follow the species guidance and do not fertilize solely because of leaf colour.",
+            "disease_status": "No disease diagnosis",
+            "disease_detail": "The photo does not provide enough visible evidence. Inspect leaf surfaces and take a close-up of affected tissue if present.",
+            "pest_status": "Not confirmed",
+            "pest_detail": "Inspect leaf undersides, stems and new growth for insects, webbing, scale or sticky residue.",
+            "sunlight_status": "Species light requirement",
+            "sunlight_detail": str(p.get("light", "Use the plant profile for its light requirement.")),
+            "growth_status": "Cannot assess from one photo",
+            "growth_detail": "Compare repeat photos from a similar distance and angle to track new leaves and overall growth.",
+        }
 
-    A single photograph cannot directly measure soil moisture, fertilizer levels,
-    growth rate, sunlight exposure or the presence of a specific pathogen. This
-    function therefore separates what the camera can screen from what the owner
-    must physically check, instead of presenting guesses as measurements.
-    """
-    y=float(health.get("yellow",0)); b=float(health.get("brown",0)); d=float(health.get("dark",0)); g=float(health.get("green",0))
-    stress = y >= .20 or b >= .16 or d >= .12
-    if b >= .16 or d >= .12:
-        visual_water = "Possible stress visible"
-        visual_water_detail = "Brown/dark foliage is visible. Check the soil with a finger or moisture meter and inspect drainage before watering."
+    y = float(health.get("yellow", 0))
+    brown = float(health.get("brown", 0))
+    colour_alert = y >= .20 or brown >= .16
+
+    if brown >= .16:
+        water_status = "Inspect leaves and soil"
+        water_detail = ("Brown-toned pixels were detected, but these may be soil, flowers, shadows or leaf tissue. "
+                        "Inspect the leaves and check soil moisture/drainage before changing watering.")
     elif y >= .20:
-        visual_water = "Check watering"
-        visual_water_detail = "Yellowing is visible. Check soil moisture and drainage; yellowing alone cannot prove overwatering or underwatering."
+        water_status = "Check leaves and soil"
+        water_detail = ("Yellow-toned pixels were detected. Confirm that the leaves themselves are yellow before "
+                        "checking soil moisture, drainage, light and pests.")
     else:
-        visual_water = "No obvious water-stress pattern"
-        visual_water_detail = "The photo does not show a strong visible stress pattern. Soil moisture still needs a physical check."
+        water_status = "No strong colour warning"
+        water_detail = "No strong yellow/brown colour pattern was detected. Soil moisture still needs a physical check."
 
-    nutrient = "No fertilizer diagnosis from photo"
-    nutrient_detail = "Fertilizer need cannot be measured from a photograph. Use the species fertilizer guidance and avoid adding fertilizer solely because a leaf looks yellow."
+    fertilizer_status = "No fertilizer diagnosis from photo"
+    fertilizer_detail = ("Fertilizer need cannot be measured from a photograph. Use the species fertilizer guidance "
+                         "and avoid adding fertilizer solely because a leaf looks yellow.")
     if y >= .20:
-        nutrient_detail += " Yellowing can have many causes, including light, watering, roots, age or nutrients."
+        fertilizer_detail += " Yellow-toned pixels may also come from flowers or lighting."
 
-    disease = "No specific disease confirmed"
-    disease_detail = "The image can screen for visible damage, but it cannot confirm a disease or pathogen. For suspected disease, inspect the affected leaf closely and compare symptoms with the plant profile."
-    if b >= .16 or d >= .12:
-        disease = "Visible damage/stress — inspect closely"
-        disease_detail = "Visible brown/dark areas deserve a close-up inspection for leaf spots, rot, pests or physical injury. Do not treat based on color alone."
+    disease_status = "No specific disease confirmed"
+    disease_detail = ("The image cannot confirm a disease or pathogen. Inspect affected leaves closely and compare "
+                       "symptoms with the plant profile before considering treatment.")
+    if brown >= .16:
+        disease_status = "Inspect brown-toned areas"
+        disease_detail = ("Brown-toned pixels are not proof of leaf damage. Inspect actual leaves for spots, rot, "
+                          "pests or physical injury before considering treatment.")
 
-    pest = "No obvious pest conclusion"
-    pest_detail = "Pests are not reliably confirmed from this photo. Inspect leaf undersides, stems and new growth for insects, webbing, scale or sticky residue before considering treatment."
-    if stress:
-        pest_detail += " Stress symptoms can overlap with pest and disease symptoms."
-
-    sunlight = str(p.get("light", "Use the plant profile for its light requirement."))
-    growth = "Growth rate cannot be measured from one photo"
-    growth_detail = "Take repeat photos from a similar distance and angle to track new leaves, height and overall growth over time."
+    pest_status = "No pest conclusion from photo"
+    pest_detail = ("Pests are not reliably confirmed from this photo. Inspect leaf undersides, stems and new growth "
+                   "for insects, webbing, scale or sticky residue before considering treatment.")
+    if colour_alert:
+        pest_detail += " Colour patterns have many possible causes and are not proof of pests."
 
     return {
-        "water_status": visual_water, "water_detail": visual_water_detail,
-        "fertilizer_status": nutrient, "fertilizer_detail": nutrient_detail,
-        "disease_status": disease, "disease_detail": disease_detail,
-        "pest_status": pest, "pest_detail": pest_detail,
-        "sunlight_status": "Species light requirement", "sunlight_detail": sunlight,
-        "growth_status": growth, "growth_detail": growth_detail,
+        "water_status": water_status, "water_detail": water_detail,
+        "fertilizer_status": fertilizer_status, "fertilizer_detail": fertilizer_detail,
+        "disease_status": disease_status, "disease_detail": disease_detail,
+        "pest_status": pest_status, "pest_detail": pest_detail,
+        "sunlight_status": "Species light requirement",
+        "sunlight_detail": str(p.get("light", "Use the plant profile for its light requirement.")),
+        "growth_status": "Growth rate cannot be measured from one photo",
+        "growth_detail": "Take repeat photos from a similar distance and angle to track new leaves, height and overall growth.",
     }
-
 
 
 def plantcare_score(plant: dict, health: dict | None, care: dict | None) -> tuple[int, str]:
@@ -1436,8 +1469,7 @@ page=st.session_state.page
 logo_svg = """<svg viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="PlantCare AI logo"><circle cx="32" cy="32" r="29" fill="#f8ffe8" stroke="#9bce57" stroke-width="3"/><path d="M17 42 C16 24 29 14 47 13 C47 30 38 44 22 46 Z" fill="#168348"/><path d="M19 49 C26 37 33 29 43 20" fill="none" stroke="#eaf8bd" stroke-width="3" stroke-linecap="round"/><path d="M30 36 C28 29 25 25 20 23 C19 31 23 36 30 36 Z" fill="#9bd65d"/></svg>"""
 
 if page=="Home":
-    st.markdown('''<div class="pc-home-hero"><div class="eyebrow">Smarter care for healthier plants</div><div class="mark"><div class="leaf-icon"></div><div><h1>PlantCare AI</h1><div class="tagline">Healthy Plants&nbsp; 🌿 Greener Tomorrow</div></div></div><div class="copy">Identify a plant, discover its needs, and build better care habits — all in one friendly place.</div><div class="copy" style="font-size:.98rem;margin-top:4px">✨ Made by Aradhy Mundhe</div><div class="pc-pills"><span class="pc-pill">📸 Photo identification</span><span class="pc-pill">🌿 56 plant profiles</span><span class="pc-pill">🛡️ Smart rejection</span><span class="pc-pill">💚 Practical care guidance</span></div></div>''',unsafe_allow_html=True)
-    # The spoken introduction was removed for the competition demo; written credits remain.
+    st.markdown('''<div class="pc-home-hero"><div class="eyebrow">Smarter care for healthier plants</div><div class="mark"><div class="leaf-icon"></div><div><h1>PlantCare AI</h1><div class="tagline">Healthy Plants&nbsp; 🌿 Greener Tomorrow</div></div></div><div class="copy">Identify a plant, discover its needs, and build better care habits — all in one friendly place.</div><div class="pc-pills"><span class="pc-pill">📸 Photo identification</span><span class="pc-pill">🌿 56 plant profiles</span><span class="pc-pill">🛡️ Smart rejection</span><span class="pc-pill">💚 Practical care guidance</span></div></div>''',unsafe_allow_html=True)
     stat_cols=st.columns(4)
     for col,emoji,value,label in zip(stat_cols,["🌱","🎯","💚","🌎"],[str(len(PLANTS)),"AI","Care","Green"],["Plant Species","Photo Identification","Plant Care Support","Greener Future"]):
         with col:
@@ -1534,7 +1566,7 @@ elif page=="Identify a Plant":
 
             if analyze:
                 sharp,bright,mindim=image_quality(image)
-                if mindim<120 or bright<6 or bright>253 or sharp<1.5:
+                if mindim<140 or bright<10 or bright>252 or sharp<4:
                     st.session_state.analysis=None
                     st.markdown('<div class="pc-warning"><b>🟡 Photo quality is too low.</b><br>Use daylight and move closer so leaves, flowers or the whole plant are clearly visible.</div>',unsafe_allow_html=True)
                 else:
@@ -1574,7 +1606,7 @@ elif page=="Identify a Plant":
                                     pass
                             try:
                                 ctx_plant,ctx_text,ctx_margin,doc_score=bioclip_context_screen(image)
-                                if ctx_text>=34.0 and ctx_margin<=-2.5:
+                                if (ctx_text>=31.0 and ctx_margin<=-2.0) or (doc_score>=.72 and ctx_margin<3.0):
                                     reject_object=True
                                     object_reason="The image appears to contain mostly text or document content, not a plant."
                             except Exception:
@@ -1648,6 +1680,22 @@ elif page=="Identify a Plant":
             st.markdown('<div class="pc-warning"><b>Confirm before relying on the name:</b> visually similar plants can look alike. Use the alternatives and the reference photo below.</div>',unsafe_allow_html=True)
         score_value=int(result.get("conf",50))
         st.markdown(f'<div class="pc-score"><div class="pc-score-ring">{score_value}</div><div class="pc-score-copy"><div class="pc-score-title">Identification confidence band</div><div class="pc-score-sub">This is a visual-match band, not a calibrated probability. Compare the plant profile and alternatives when the band is not strong.</div></div></div>',unsafe_allow_html=True)
+
+        # Signature feature: explainable match passport. These are profile traits
+        # for the user to compare with the uploaded photo, not claims that every
+        # listed trait was detected by the vision model.
+        st.markdown("### 🧭 PlantMatch Intelligence")
+        st.markdown("**Why this is a candidate:** compare the visible features in your photo with this plant profile. The model ranks visual similarity; it does not prove a species from one image.")
+        trait_cols=st.columns(3)
+        trait_items=[
+            ("🍃 Leaf clues",top.get("leaf","Compare leaf shape, arrangement and veins with the profile.")),
+            ("🌸 Flower clues",top.get("flower","Flower details may help when flowers are visible.")),
+            ("🌿 Growth habit",top.get("growth","Compare the overall growth pattern with the profile.")),
+        ]
+        for trait_col,(trait_title,trait_text) in zip(trait_cols,trait_items):
+            with trait_col:
+                st.markdown(f'<div class="pc-card"><h3>{trait_title}</h3><p>{trait_text}</p></div>',unsafe_allow_html=True)
+        st.caption("Evidence boundary: a visual match is not a botanical confirmation. If the top candidates look similar, photograph the leaves and flowers separately in good light.")
         st.markdown("### 🌿 Other possible matches")
         alt=result["rows"][1:4]
         alt_map=get_plant_photos_for_records(tuple((x[0]['common_name'], x[0]['scientific_name']) for x in alt)) if alt else {}
@@ -1657,32 +1705,19 @@ elif page=="Identify a Plant":
                 plant_photo(p, photo_map=alt_map)
             with col2:
                 st.markdown(f'<div class="pc-card"><h3>{p["common_name"]}</h3><p><i>{p["scientific_name"]}</i><br>Visual score: {s:.3f}</p></div>',unsafe_allow_html=True)
-
-        # Exclusive single-session feature: Plant Look-Alike Showdown.
-        # This compares model-ranked candidates using the existing botanical profile,
-        # rather than pretending the vision model directly measured every trait.
-        compare_rows=result["rows"][:3]
-        if len(compare_rows) >= 2:
-            st.markdown("### 🔬 Plant Look-Alike Showdown")
-            st.caption("Compare the leading candidates using their stored botanical descriptions. These are reference traits, not proof that every trait is visible in this photo.")
-            compare_cols=st.columns(len(compare_rows))
-            trait_fields=[("Leaf clues","leaf"),("Flower clues","flower"),("Growth habit","growth"),("Identification clues","identification")]
-            for col,(candidate,match_score) in zip(compare_cols,compare_rows):
-                with col:
-                    st.markdown(f'<div class="pc-card"><h3>{candidate.get("common_name","Plant")}</h3><p><i>{candidate.get("scientific_name","")}</i></p><p><b>Model match:</b> {match_score:.3f}</p></div>',unsafe_allow_html=True)
-                    for trait_label,trait_key in trait_fields:
-                        trait_value=str(candidate.get(trait_key, "Not listed" ) or "Not listed")
-                        st.markdown(f'<div class="pc-mini" style="margin:6px 0"><b>{trait_label}</b><span>{trait_value[:260]}</span></div>',unsafe_allow_html=True)
         health=result.get("health")
         if health:
             st.markdown("### 🩺 Visual health screening")
             st.markdown(f'<div class="pc-result"><div class="pc-result-name" style="font-size:1.35rem">{health["level"]}</div><div class="pc-scientific">{health["status"]}</div></div>',unsafe_allow_html=True)
-            hc1,hc2,hc3,hc4=st.columns(4)
-            with hc1: st.metric("Green foliage",f'{health["green"]*100:.0f}%')
-            with hc2: st.metric("Yellowing",f'{health["yellow"]*100:.0f}%')
-            with hc3: st.metric("Brown/damaged",f'{health["brown"]*100:.0f}%')
-            with hc4: st.metric("Dark areas",f'{health["dark"]*100:.0f}%')
-            st.markdown(f'<div class="pc-warning"><b>Important:</b> {health_issue_text(top,health)}<br><small>This is a visual screening only, not a definitive disease diagnosis. A clear close-up of affected leaves is needed for more reliable assessment.</small></div>',unsafe_allow_html=True)
+            if health.get("screenable", True):
+                hc1,hc2,hc3=st.columns(3)
+                with hc1: st.metric("Green-toned pixels",f'{health["green"]*100:.0f}%')
+                with hc2: st.metric("Yellow-toned pixels",f'{health["yellow"]*100:.0f}%')
+                with hc3: st.metric("Brown-toned pixels",f'{health["brown"]*100:.0f}%')
+                st.caption("These percentages describe colour patterns among selected plant-like pixels, not the percentage of healthy or damaged leaves. Flowers, soil, lighting and backgrounds can affect them.")
+            else:
+                st.info("There is not enough clearly screenable plant-like colour for percentage estimates. Try a closer, well-lit photo of the leaves.")
+            st.markdown(f'<div class="pc-warning"><b>Important:</b> {health_issue_text(top,health)}<br><small>This is a colour-pattern screen only. It cannot confirm plant health, diagnose disease, detect pests reliably, or measure soil moisture or nutrients.</small></div>',unsafe_allow_html=True)
         st.markdown("### 🩺 PlantCare check")
         care=result.get("care") or care_assessment(image, top, health or visual_health_screen(image))
         pcs, pcb = plantcare_score(top, health, care)
