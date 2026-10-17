@@ -1,25 +1,22 @@
-PlantCare AI V13 Final Consolidated — model notes
+PlantCare AI — Model Notes
 
-Model sources used by the app:
-- Imageomics BioCLIP: https://huggingface.co/imageomics/bioclip
-- OpenCLIP: https://pypi.org/project/open-clip-torch/
-- Streamlit: https://docs.streamlit.io/
-- PyTorch: https://pytorch.org/get-started/locally/
+Primary optional model service: Pl@ntNet API
+- Endpoint: https://my-api.plantnet.org/v2/identify/all
+- Requires PLANTNET_API_KEY in Streamlit Secrets or the environment.
+- The service returns ranked scientific taxa and scores. PlantCare AI maps results into the local 56-plant library only when scientific names match exactly after normalization.
+- A result outside the supported library is not silently relabelled as a supported plant; the local BioCLIP classifier is used as a fallback.
+- Pl@ntNet API service documentation: https://my.plantnet.org/doc/api/identify
+- API key must never be committed to public source control. Uploaded photos are sent to Pl@ntNet when configured.
 
-BioCLIP is used through the OpenCLIP interface documented by Imageomics. The
-model is loaded lazily and cached. The app uses BioCLIP for zero-shot plant
-species matching and a separate prompt ensemble for strong non-plant rejection.
-The species result is never treated as a calibrated probability.
+Local fallback: BioCLIP via open_clip
+- Model ID: hf-hub:imageomics/bioclip
+- Zero-shot text prompts cover all 56 local plant records, with multiple botanical descriptions and multi-view image scoring.
+- A separate general-object screen and plant-presence prompts help reject non-plant images, but these gates can still make mistakes.
+- The local fallback is not a fine-tuned classifier trained specifically on the project's 56 plant classes.
 
-Health/care analysis is intentionally conservative. Visible color/texture
-patterns are screening signals only; a single RGB photograph cannot directly
-measure soil moisture, fertilizer concentration, growth rate, light exposure,
-or confirm a disease/pathogen. The UI explicitly separates visual screening
-from species-specific care guidance.
-
-
-Competition update notes
-- The class prompt ensemble now includes species-specific hints for all 56 plant records, including more explicit contrastive descriptions for Tulsi (Ocimum tenuiflorum) and Mint (Mentha spicata).
-- Multi-view ranking combines average view scores with a modest best-view contribution. This is a ranking heuristic, not a calibration method and not proof of improved accuracy without labelled validation.
-- Plant Health Copilot is a transparent rule-based checklist implemented in plantcare_core.py. It does not use a disease classifier and must not be described as diagnosing plant disease.
-- The ZIP does not include trained model weights or a labelled image evaluation set. BioCLIP and the general-object model download/load at runtime.
+Scope and limitations
+- No single model guarantees correct classification for every photo, angle, cultivar, lighting condition or plant growth stage.
+- Pl@ntNet confidence scores are candidate scores, not a guarantee of correctness.
+- Accuracy on the exact 56 classes must be measured using a labelled holdout set of real photos per species and a separate non-plant set.
+- Tulsi vs Mint and Mango/Marigold should be tested with multiple independent photos, not just one image each.
+- Never treat the Plant Health Copilot as a disease diagnosis.
