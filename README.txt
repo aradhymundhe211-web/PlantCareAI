@@ -7,6 +7,7 @@ Key features
 - Camera capture and gallery upload for plant photos
 - Plant identification with non-plant screening, alternative matches, and uncertainty messages
 - Plant Look-Alike Showdown: compare the leading candidate species using their stored leaf, flower, growth and identification descriptions
+- Plant Health Copilot: symptom-and-condition checklist with possible causes, safe next steps, and a session-scoped observation journal
 - Plant library and searchable care profiles
 - Visual leaf-colour screening (not a confirmed disease diagnosis)
 - Single-photo care guidance and plant-profile information
@@ -29,5 +30,9 @@ Accuracy and safety
 - Use clear, well-lit photos. Compare alternatives and the plant profile before acting on the result.
 - Visual fallback checks were widened to better admit flower-heavy photos and foliage under varied lighting. Non-plant screening is retained, but it is not infallible.
 - Visible leaf colours can flag patterns, but they do not confirm a disease or measure soil moisture, fertilizer/nutrient levels, or root health.
+
+Plant Health Copilot uses transparent rules, not a trained disease detector. Its possible causes are screening prompts, not confirmed diagnoses. Journal entries are session-scoped and may disappear after a refresh or new session.
+
+Run the lightweight project checks from the repository root with: `python -m unittest discover -s tests -v`.
 
 See QA_REPORT.txt for checks performed and limitations that remain.
