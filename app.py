@@ -2153,4 +2153,3 @@ elif page=="About":
     st.markdown('<div class="pc-info"><b>For your teacher:</b> the easiest experience is a public hosted URL. A <code>localhost</code> address only works on the computer running PlantCare AI. The included launcher is for local use; online sharing requires deployment to a web host.</div>',unsafe_allow_html=True)
 
 st.markdown('<div class="pc-footer">PlantCare AI • Made by Aradhy Mundhe • Identify • Learn • Care</div>',unsafe_allow_html=True)
-
