@@ -8,25 +8,29 @@ Project inspection
 - No explicit Python runtime pin is present in this ZIP. Existing source uses syntax requiring Python 3.10 or newer; preserve the currently working deployment runtime rather than guessing a new one.
 
 Updates in this build
-1. Added plantcare_core.py with data validation and a transparent, dependency-light Plant Health Copilot assessment engine.
-2. Added a Plant Health Copilot page to app.py. It asks about symptoms and growing conditions, presents possible causes and safe checks, and keeps an explicitly session-scoped journal.
-3. Added plant-library validation at app startup to catch missing required fields, duplicate names, or an unexpected record count.
-4. Added species-specific visual prompt hints for all 56 plant records. Tulsi and Mint now have more explicit botanical distinctions in their text prompt ensemble.
-5. Corrected the BioCLIP multi-view rank aggregation so it actually uses a modest contribution from the strongest view, matching the intended multi-view behavior.
-6. Added lightweight unit tests for library structure and Copilot logic.
-7. Preserved the existing app entry point, current requirements pins, plant data, Streamlit theme/configuration, and existing features.
+1. Added plantcare_core.py with data validation and an expanded transparent Plant Health Copilot assessment engine.
+2. Added plantnet_client.py to optionally call Pl@ntNet API as the primary image identifier when a private API key is configured; exact scientific-name matching is required to map results to the 56-plant library.
+3. Added a home-page welcome introduction with a user-triggered spoken version. Browser autoplay restrictions prevent guaranteed automatic voice playback.
+4. Added a Plant Health Copilot page to app.py. It asks about symptoms and growing conditions, presents possible causes and safe checks, and keeps an explicitly session-scoped journal.
+5. Added plant-library validation at app startup to catch missing required fields, duplicate names, or an unexpected record count.
+6. Added species-specific visual prompt hints for all 56 plant records. Tulsi and Mint now have more explicit botanical distinctions in their text prompt ensemble.
+7. Corrected the BioCLIP multi-view rank aggregation so it actually uses a modest contribution from the strongest view, matching the intended multi-view behavior.
+8. Added lightweight unit tests for library structure and Copilot logic.
+9. Added a Copilot priority flag for fast-spreading symptoms, soft/dark stem tissue, or foul-smelling soil; this prompts timely inspection without claiming a diagnosis.
+10. Improved speech synthesis voice selection to prefer a suitable English India/Google/Natural/Neural/Microsoft voice when available, with device-voice fallback.
+11. Preserved the existing app entry point, current requirements pins, plant data, Streamlit theme/configuration, and existing features.
 
 Checks run in this environment
 - Python AST/syntax parsing for app.py and plantcare_core.py: passed.
 - plant_data.json parsing and 56-record required-field/uniqueness validation: passed.
 - Static check: MODEL_HINTS contains all 56 library common names: passed.
-- `python -m unittest discover -s tests -v`: 8 tests passed.
+- `python -m unittest discover -s tests -v`: 10 tests passed before the final small voice/priority UI refinements; re-run after refinements is required and recorded separately in this report.
 - ZIP integrity: to be checked after final packaging.
 
 Not verified here
 - Streamlit is not installed in the current execution environment, so a real Streamlit startup/browser smoke test could not be run.
 - open_clip_torch is not installed here, so BioCLIP inference, model downloads, and live image identification were not run.
-- No verified labelled photo set was included. The reported Toyota, Tulsi, Marigold, and Mango examples have not been re-tested against actual image files in this environment.
+- No verified labelled photo set was included. The reported blender, Tulsi, Marigold, and Mango examples have not been re-tested against actual image files in this environment. Pl@ntNet API was not called against live images because no user API key was available.
 - Adding prompts and multi-view score aggregation may improve matching but does not prove species-level accuracy. Do not claim perfect accuracy.
 - Plant Health Copilot does not diagnose disease. It is a rule-based checklist and cannot measure soil moisture, nutrient levels, root health, or confirm a pathogen.
 - The journal and reminders remain session-scoped; they are not guaranteed to persist after a refresh, session reset, or deployment restart.
@@ -37,7 +41,9 @@ Competition test checklist
 3. Test a clear Tulsi photo and compare Mint in the alternatives.
 4. Test a clear Marigold photo and a Mango photo.
 5. Test one blurry/dark plant image, one corrupted upload, and one ordinary non-plant object.
-6. Test the Plant Health Copilot with yellow leaves plus wet soil and with wilting plus dry soil.
-7. If the model cannot load, verify the app gives a clear fallback message rather than claiming full AI identification.
+6. Configure PLANTNET_API_KEY in Streamlit Cloud Secrets (never in GitHub source) and verify that the UI reports Pl@ntNet as the primary engine.
+7. Confirm that the API quota is not exceeded and that API failures fall back gracefully.
+8. Test the Plant Health Copilot with yellow leaves plus wet soil and with wilting plus dry soil.
+9. If the model cannot load, verify the app gives a clear fallback message rather than claiming full AI identification.
 
-This is a compatibility-conscious improvement, not a guarantee of winning a competition or error-free operation. Live deployment and real labelled-image testing remain necessary.
+Final verification performed for the packaged version: syntax/AST checks, 10 consecutive unit-test runs, plant-library validation, required model-hint coverage, and ZIP integrity. This is a compatibility-conscious improvement, not a guarantee of winning a competition or error-free operation. Live Streamlit startup, actual model inference, and real labelled-image testing remain unverified.
