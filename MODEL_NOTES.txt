@@ -16,3 +16,10 @@ patterns are screening signals only; a single RGB photograph cannot directly
 measure soil moisture, fertilizer concentration, growth rate, light exposure,
 or confirm a disease/pathogen. The UI explicitly separates visual screening
 from species-specific care guidance.
+
+
+Competition update notes
+- The class prompt ensemble now includes species-specific hints for all 56 plant records, including more explicit contrastive descriptions for Tulsi (Ocimum tenuiflorum) and Mint (Mentha spicata).
+- Multi-view ranking combines average view scores with a modest best-view contribution. This is a ranking heuristic, not a calibration method and not proof of improved accuracy without labelled validation.
+- Plant Health Copilot is a transparent rule-based checklist implemented in plantcare_core.py. It does not use a disease classifier and must not be described as diagnosing plant disease.
+- The ZIP does not include trained model weights or a labelled image evaluation set. BioCLIP and the general-object model download/load at runtime.
