@@ -50,11 +50,32 @@ def request_json(url, params=None):
     return response.json()
 
 
+# Current accepted names and widely used synonyms returned by botanical
+# databases can differ. Keep aliases explicit and only accept an exact name match.
+TAXON_ALIASES = {
+    "Dracaena trifasciata": ("Dracaena trifasciata", "Sansevieria trifasciata"),
+    "Dypsis lutescens": ("Dypsis lutescens", "Chrysalidocarpus lutescens"),
+    "Dracaena marginata": ("Dracaena marginata", "Dracaena reflexa var. angustifolia"),
+    "Schefflera arboricola": ("Schefflera arboricola", "Heptapleurum arboricola"),
+    "Hibiscus rosa-sinensis": ("Hibiscus rosa-sinensis", "Hibiscus x rosa-sinensis", "Hibiscus × rosa-sinensis"),
+    "Murraya koenigii": ("Murraya koenigii", "Bergera koenigii"),
+    "Citrus limon": ("Citrus limon", "Citrus x limon", "Citrus × limon"),
+}
+
+
 def exact_taxon(scientific_name):
-    data = request_json(f"{API}/taxa", {"q": scientific_name, "per_page": 30, "order_by": "observations_count"})
-    for taxon in data.get("results", []):
-        if str(taxon.get("name", "")).casefold() == scientific_name.casefold():
-            return taxon
+    aliases = TAXON_ALIASES.get(scientific_name, (scientific_name,))
+    for alias in aliases:
+        try:
+            data = request_json(
+                f"{API}/taxa",
+                {"q": alias, "per_page": 100, "order_by": "observations_count"},
+            )
+        except Exception:
+            continue
+        for taxon in data.get("results", []):
+            if str(taxon.get("name", "")).strip().casefold() == alias.casefold():
+                return taxon
     return None
 
 
@@ -83,40 +104,58 @@ def image_bytes(url):
 def collect_samples(plant, count):
     taxon = exact_taxon(plant["scientific_name"])
     if not taxon:
-        return [], "Exact iNaturalist taxon not found"
-    data = request_json(
-        f"{API}/observations",
-        {
-            "taxon_id": taxon["id"],
-            "quality_grade": "research",
-            "photos": "true",
-            "per_page": min(200, max(30, count * 12)),
-            "order_by": "observed_on",
-            "order": "desc",
-        },
-    )
+        return [], "No exact accepted taxon found (including configured synonyms)"
     samples, seen = [], set()
-    for obs in data.get("results", []):
-        obs_id = obs.get("id")
-        if obs_id in seen:
-            continue
-        photos = obs.get("photos") or []
-        if not photos:
-            continue
-        url = photos[0].get("url")
-        if not url:
-            continue
-        seen.add(obs_id)
+    # Some taxa have few recent research-grade observations. Paginate instead
+    # of treating the first 30 observations as the entire photo supply.
+    for page in range(1, 9):
         try:
-            raw = image_bytes(url)
-            if raw:
-                samples.append((obs_id, raw, url))
+            data = request_json(
+                f"{API}/observations",
+                {
+                    "taxon_id": taxon["id"],
+                    "quality_grade": "research",
+                    "photos": "true",
+                    "per_page": 100,
+                    "page": page,
+                    "order_by": "observed_on",
+                    "order": "desc",
+                },
+            )
         except Exception:
-            pass
+            if not samples:
+                continue
+            break
+        observations = data.get("results", [])
+        if not observations:
+            break
+        for obs in observations:
+            obs_id = obs.get("id")
+            if obs_id in seen:
+                continue
+            photos = obs.get("photos") or []
+            if not photos:
+                continue
+            # Try each observation photo until one can be decoded; the first
+            # URL may be missing, malformed, or unavailable from the host.
+            seen.add(obs_id)
+            for photo in photos[:3]:
+                url = photo.get("url")
+                if not url:
+                    continue
+                try:
+                    raw = image_bytes(url)
+                    if raw:
+                        samples.append((obs_id, raw, url))
+                        break
+                except Exception:
+                    continue
+            if len(samples) >= count:
+                break
+            time.sleep(0.02)
         if len(samples) >= count:
             break
-        time.sleep(0.05)
-    return samples, "" if samples else "No downloadable research-grade photos found"
+    return samples, "" if samples else "No downloadable research-grade photos found after pagination"
 
 
 def focus_crop(img):
@@ -260,7 +299,7 @@ def load_model(requested_device="auto"):
         raise RuntimeError("CUDA was requested but is not available in this Python environment.")
     device = ("cuda" if torch.cuda.is_available() else "cpu") if requested_device == "auto" else requested_device
     errors = []
-    for model_id in ("hf-hub:imageomics/bioclip-2", "hf-hub:imageomics/bioclip"):
+    for model_id in ("hf-hub:imageomics/bioclip", "hf-hub:imageomics/bioclip-2"):
         try:
             model, _, preprocess = open_clip.create_model_and_transforms(model_id)
             tokenizer = open_clip.get_tokenizer(model_id)
