@@ -521,7 +521,7 @@ def load_bioclip():
 
 
 MODEL_HINTS = {
-    "Mango": "Mangifera indica mango tree, alternate simple long narrow leathery lanceolate leaves with smooth entire margins and a prominent pale midrib, pointed tips and often reddish new flush, leaves are single blades not pinnate leaflets like neem",
+    "Mango": "Mangifera indica mango tree, alternate simple long narrow leathery lanceolate leaves with smooth entire margins and a prominent pale midrib, pointed tips and often reddish new flush, leaves are single blades not pinnate neem leaflets; not pinnate leaflets like neem",
     "Marigold": "marigold, Tagetes erecta, yellow or orange round flower heads, pinnate foliage",
     "Rose": "rose, Rosa, woody shrub with serrated oval leaflets and distinctive rose flowers",
     "Hibiscus": "Hibiscus rosa-sinensis, woody shrub with glossy ovate leaves and toothed margins, large showy trumpet-shaped flowers with five broad petals and a long protruding central staminal column when flowering",
@@ -558,7 +558,7 @@ MODEL_HINTS = {
     "Amla": "amla, Phyllanthus emblica, small closely spaced leaves along branchlets and round fruit",
     "Coconut": "coconut palm, Cocos nucifera, tall palm trunk and long feather-like fronds",
     "Bamboo": "bamboo, Bambusa, tall segmented hollow-looking green culms and narrow leaves",
-    "ZZ Plant": "Zamioculcas zamiifolia, thick fleshy upright or arching pinnate leaf stalks carrying paired glossy oval leaflets, leaflets smooth and waxy, grows from thick underground rhizomes, not segmented bamboo canes",
+    "ZZ Plant": "Zamioculcas zamiifolia, thick fleshy upright or arching pinnate leaf stalks carrying paired glossy oval leaflets, leaflets smooth and waxy, grows from thick underground rhizomes, not bamboo canes or segmented bamboo canes",
     "Heartleaf Philodendron": "Philodendron hederaceum, trailing vine with smooth heart-shaped leaves and pointed tips",
     "Fiddle Leaf Fig": "Ficus lyrata, large violin-shaped leathery leaves with prominent pale veins",
     "Lucky Bamboo": "Dracaena sanderiana, smooth upright green cane stems with clearly visible ring-shaped nodes and tufts of narrow lance-shaped leaves; often grown in water, not true bamboo",
