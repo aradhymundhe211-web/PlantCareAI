@@ -642,6 +642,24 @@ def bioclip_text_features():
                 "Dracaena sanderiana lucky bamboo, green cane stalks with visible horizontal ring nodes and narrow leaves emerging from nodes",
                 "lucky bamboo houseplant with segmented canes arranged in spirals or bundles, often rooted in water, not Bambusa bamboo",
             ])
+        elif common == "Snake Plant":
+            prompts.extend([
+                "Dracaena trifasciata snake plant, rigid thick upright sword-shaped leaves growing directly from the soil in a basal rosette, dark green cross-banded leaves with gray-green horizontal mottling",
+                "close-up of snake plant foliage, broad flat vertical succulent leaves with transverse banding, sometimes yellow leaf margins, no woody canes and no palm fronds",
+                "Sansevieria trifasciata potted houseplant, multiple stiff upright leaves from underground rhizomes, not Dieffenbachia broad soft leaves",
+            ])
+        elif common == "Dracaena Marginata":
+            prompts.extend([
+                "Dracaena marginata Madagascar dragon tree, thin woody cane trunks topped by tufts of very narrow linear pointed leaves with red or burgundy margins",
+                "close-up of Dracaena marginata narrow spiky leaves radiating from cane tips, red-edged green leaves, not broad sword-shaped snake plant leaves",
+                "Madagascar dragon tree with slender branching woody canes and narrow tufts of leaves, not Amla foliage",
+            ])
+        elif common == "Lemon":
+            prompts.extend([
+                "Citrus limon lemon tree, simple glossy oval citrus leaves attached singly to woody twigs, sometimes narrow winged leaf stalks, not compound pinnate leaves",
+                "close-up of lemon tree leaves and thorny twig, individual glossy elliptic leaf blades with citrus midrib, fragrant white citrus blossoms or yellow lemons if present",
+                "lemon citrus plant foliage with alternate simple leaves, not guava leaves and not curry leaf or neem compound leaflets",
+            ])
         elif common == "Spinach":
             prompts.extend([
                 "Spinacia oleracea spinach, edible leafy vegetable in a low basal rosette, smooth tender oval or arrow-shaped leaves",
@@ -665,11 +683,26 @@ def bioclip_text_features():
                 "close-up of ZZ plant pinnate leaves, smooth thick waxy dark green leaflets on arching succulent petioles, not bamboo canes",
                 "Zamioculcas zamiifolia growing from thick underground rhizomes, feather-like compound leaves with rounded leaflets",
             ])
+        elif common == "Dwarf Schefflera":
+            prompts.extend([
+                "Schefflera arboricola dwarf umbrella tree, each leaf has 7 to 9 oval leaflets radiating like fingers from one shared point at the end of a petiole",
+                "close-up of dwarf umbrella plant palmate compound leaves, several broad oval leaflets all attached at a central hub, not pinnate neem leaflets",
+            ])
         elif common == "Aglaonema":
             prompts.extend([
                 "Aglaonema Chinese evergreen houseplant, broad oval pointed leaves with silver or pale green patterned centres and dark green margins",
                 "close-up of Aglaonema commutatum foliage, symmetrical silver-green variegation on broad leaves with a central midrib",
                 "Chinese evergreen Aglaonema compact clump of patterned leaves emerging from short cane-like stems, distinguish from Dieffenbachia",
+            ])
+        elif common == "Hibiscus":
+            prompts.extend([
+                "Hibiscus rosa-sinensis tropical hibiscus shrub, large five broad-petaled trumpet flower with long protruding central staminal column, glossy toothed ovate leaves",
+                "close-up of hibiscus flower showing prominent long central column of stamens and stigma, five overlapping petals, not chrysanthemum flower head",
+            ])
+        elif common == "Curry Leaf":
+            prompts.extend([
+                "Murraya koenigii curry leaf tree, pinnate compound leaf with many small separate glossy pointed leaflets arranged in pairs along one central rachis",
+                "close-up of curry leaves, numerous small leaflets on a single central stalk, aromatic Indian culinary shrub, not Schefflera palmate leaflets and not simple lemon leaves",
             ])
         elif common == "Mango":
             prompts.extend([
