@@ -1738,6 +1738,22 @@ elif page=="Identify a Plant":
         if result.get("model_error"):
             st.warning("The main vision model could not be loaded, so this result is only a local shortlist. Check the internet connection and try Analyze again.")
         st.markdown(f'<div class="pc-result"><div style="font-size:.78rem;font-weight:900;color:#64766b;text-transform:uppercase;letter-spacing:.08em">TOP PLANT MATCH</div><div class="pc-result-name">🌿 {top["common_name"]}</div><div class="pc-scientific"><b>Common name:</b> {top["common_name"]} &nbsp; · &nbsp; <i>{top["scientific_name"]}</i> · {top["family"]}</div><div class="pc-badge">{result["label"]} · relative model ranking</div></div>',unsafe_allow_html=True)
+        # Show an independent real reference photo so the user can visually compare
+        # the prediction instead of trusting the text label alone.
+        reference_records = tuple(
+            (item[0]["common_name"], item[0]["scientific_name"])
+            for item in result["rows"][:4]
+        )
+        reference_map = get_plant_photos_for_records(reference_records)
+        photo_col, compare_col = st.columns([1, 2])
+        with photo_col:
+            plant_photo(top, photo_map=reference_map)
+            st.caption("Reference image from an exact botanical taxon/article match when available; compare it with your upload.")
+        with compare_col:
+            st.markdown("**Visual cross-check before accepting the result**")
+            st.write(f"Expected scientific name: *{top['scientific_name']}*")
+            st.write(top.get("identification", "Compare the visible leaves, stems, flowers, and growth habit."))
+            st.info("Reference photos support visual comparison; they are not training images and do not guarantee the prediction is correct.")
         if result["label"] in ["Possible match","Needs confirmation"] or "confirm visually" in result["label"]:
             st.markdown('<div class="pc-warning"><b>Confirm before relying on the name:</b> visually similar plants can look alike. Use the alternatives and the reference photo below.</div>',unsafe_allow_html=True)
         st.markdown('<div class="pc-info"><b>How to read the result:</b> the label describes relative separation between model candidates, not a calibrated probability. Compare the alternative species and visible traits before relying on the name.</div>',unsafe_allow_html=True)
@@ -1759,7 +1775,7 @@ elif page=="Identify a Plant":
         st.caption("Evidence boundary: a visual match is not a botanical confirmation. If the top candidates look similar, photograph the leaves and flowers separately in good light.")
         st.markdown("### 🌿 Other possible matches")
         alt=result["rows"][1:4]
-        alt_map=get_plant_photos_for_records(tuple((x[0]['common_name'], x[0]['scientific_name']) for x in alt)) if alt else {}
+        alt_map=reference_map
         for p,s in alt:
             col1,col2=st.columns([1,2])
             with col1:
