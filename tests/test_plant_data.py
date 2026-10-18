@@ -94,3 +94,14 @@ def test_benchmark_prompt_builder_covers_all_56_species():
         prompts = prompts_for(plant, hints[plant["common_name"]])
         assert len(prompts) >= 6
         assert all(isinstance(prompt, str) and prompt.strip() for prompt in prompts)
+
+
+def test_species_ranker_uses_three_views_and_uncertainty_is_not_called_accepted():
+    source = (ROOT / "app.py").read_text(encoding="utf-8")
+    views_start = source.index("def _analysis_views(")
+    rank_start = source.index("def bioclip_rank(", views_start)
+    view_code = source[views_start:rank_start]
+    assert "return views[:3]" in view_code
+    assert 'POSSIBLE PLANT MATCH — CONFIRMATION NEEDED' in source
+    assert 'POSSIBLE PLANT MATCH — CHECK THE ALTERNATIVES' in source
+    assert 'PLANT PHOTO ACCEPTED' not in source
