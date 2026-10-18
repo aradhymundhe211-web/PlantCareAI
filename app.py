@@ -842,7 +842,7 @@ def _analysis_views(img: Image.Image) -> List[Image.Image]:
         if side2>=160:
             views.append(focus.crop(((fw-side2)//2,(fh-side2)//2,(fw+side2)//2,(fh+side2)//2)))
     if h>220:
-        views.append(im.crop((0,0,w,int(h*.82)))
+        views.append(im.crop((0,0,w,int(h*.82))))
     return views[:3]
 
 def bioclip_rank(img: Image.Image, filename_hint: str = ""):
