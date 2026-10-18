@@ -4,7 +4,7 @@ import ast
 import json
 from pathlib import Path
 
-from plantcare_core import REQUIRED_PLANT_FIELDS, validate_plant_records
+from plantcare_core import REQUIRED_PLANT_FIELDS, decide_vision_gate, validate_plant_records
 from benchmark_56 import load_hints, prompts_for
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -105,3 +105,54 @@ def test_species_ranker_uses_three_views_and_uncertainty_is_not_called_accepted(
     assert 'POSSIBLE PLANT MATCH — CONFIRMATION NEEDED' in source
     assert 'POSSIBLE PLANT MATCH — CHECK THE ALTERNATIVES' in source
     assert 'PLANT PHOTO ACCEPTED' not in source
+
+
+
+def test_vision_gate_allows_ambiguous_plant_photo_to_reach_species_ranker():
+    accepted, reason, category = decide_vision_gate(
+        quality_ok=True,
+        general_object_rejected=False,
+        bio_plant_score=20.5,
+        bio_object_score=23.0,
+        document_score=0.35,
+    )
+    assert accepted is True
+    assert category == "uncertain"
+    assert "continuing to species ranking" in reason
+
+
+def test_vision_gate_rejects_decisive_nonplant_evidence():
+    accepted, reason, category = decide_vision_gate(
+        quality_ok=True,
+        general_object_rejected=False,
+        bio_plant_score=18.0,
+        bio_object_score=28.0,
+        document_score=0.20,
+    )
+    assert accepted is False
+    assert category == "nonplant"
+    assert "non-plant object" in reason
+
+
+def test_vision_gate_does_not_reject_plant_with_clear_plant_advantage():
+    accepted, _, category = decide_vision_gate(
+        quality_ok=True,
+        general_object_rejected=False,
+        bio_plant_score=23.0,
+        bio_object_score=19.0,
+        document_score=0.25,
+    )
+    assert accepted is True
+    assert category == "accepted"
+
+
+def test_vision_gate_rejects_clear_document_without_plant_evidence():
+    accepted, _, category = decide_vision_gate(
+        quality_ok=True,
+        general_object_rejected=False,
+        bio_plant_score=19.0,
+        bio_object_score=20.0,
+        document_score=0.95,
+    )
+    assert accepted is False
+    assert category == "nonplant"
