@@ -919,7 +919,7 @@ def general_object_screen(img_bytes: bytes):
             "traffic light","parking meter","fire engine","ambulance","police van","school bus","desktop computer",
             "desk","chair","table","bottle","cup","mug","backpack","shoe","clock","watch","car wheel",
             "pencil","pen","ballpoint","fountain pen","ruler","eraser","book jacket","binder",
-            "window shade","window screen","screen door","door","window","glass","vase","plate",
+            "window shade","window screen","screen door","door","window","glass","plate",
             "scissors","stapler","paper towel","toilet tissue","box","carton","packet"
         )
         plant_terms=(
