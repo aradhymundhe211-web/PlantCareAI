@@ -823,7 +823,7 @@ def _focus_crop(img: Image.Image) -> Image.Image | None:
 
 
 def _analysis_views(img: Image.Image) -> List[Image.Image]:
-    """Use original, center, upper and vegetation-focused views for camera/gallery parity."""
+    """Build a small, consistent set of full-frame and plant-focused views."""
     im=ImageOps.exif_transpose(img).convert("RGB")
     # Standardize orientation/size before either camera or gallery reaches the model.
     im.thumbnail((1600,1600),Image.Resampling.LANCZOS)
@@ -833,8 +833,7 @@ def _analysis_views(img: Image.Image) -> List[Image.Image]:
     if side>=160:
         left=max(0,(w-side)//2); top=max(0,(h-side)//2)
         views.append(im.crop((left,top,left+side,top+side)))
-    if h>220:
-        views.append(im.crop((0,0,w,int(h*.82))))
+    # Prioritize the vegetation-focused crop so it remains in the three-view budget.
     focus=_focus_crop(im)
     if focus is not None:
         views.append(focus)
@@ -842,11 +841,9 @@ def _analysis_views(img: Image.Image) -> List[Image.Image]:
         side2=int(min(fw,fh)*.90)
         if side2>=160:
             views.append(focus.crop(((fw-side2)//2,(fh-side2)//2,(fw+side2)//2,(fh+side2)//2)))
-    # Three complementary views are enough for a useful ensemble: the full frame,
-    # a centered crop, and (when available) a vegetation-focused crop. The older
-    # five-view path multiplied inference time across three separate BioCLIP checks.
+    if h>220:
+        views.append(im.crop((0,0,w,int(h*.82)))
     return views[:3]
-
 
 def bioclip_rank(img: Image.Image, filename_hint: str = ""):
     """Rank the 56 supported plants with BioCLIP across several image views.
