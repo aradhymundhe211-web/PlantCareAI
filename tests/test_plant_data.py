@@ -118,7 +118,7 @@ def test_vision_gate_allows_ambiguous_plant_photo_to_reach_species_ranker():
     )
     assert accepted is True
     assert category == "uncertain"
-    assert "continuing to species ranking" in reason
+    assert "continuing to species matching" in reason
 
 
 def test_vision_gate_rejects_decisive_nonplant_evidence():
