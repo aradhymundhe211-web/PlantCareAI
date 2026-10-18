@@ -16,7 +16,10 @@ APP_DIR = Path(__file__).resolve().parent
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
-from plantcare_core import assess_plant_health, answer_copilot_question, validate_plant_records, decide_vision_gate
+from plantcare_core import (
+    assess_plant_health, answer_copilot_question, validate_plant_records,
+    decide_vision_gate, should_reject_general_object,
+)
 
 import numpy as np
 import requests
@@ -986,16 +989,15 @@ def general_object_screen(img_bytes: bytes):
         # Hard everyday-object evidence wins unless there is similarly strong
         # botanical evidence. This specifically prevents vehicles/people/etc.
         # from reaching the 56-class BioCLIP species matcher.
-        reject=bool(
-            hard_hits and
-            (
-                # Potted plants often trigger ImageNet labels such as vase or pot.
-                # Reject only when object evidence is strong and no plant-like label
-                # competes with it; a weak generic object guess is not enough.
-                (top1 in {n for n,_ in hard_hits} and top1_score >= 0.32 and plant_max < 0.12) or
-                (hard_max >= 0.40 and hard_max >= plant_max * 1.60) or
-                (hard_max >= 0.58 and plant_max < 0.20)
-            )
+        # Potted plants can trigger generic container labels such as "vase".
+        # Keep the policy in a dependency-light helper so its decision rules can
+        # be unit-tested without loading ImageNet/BioCLIP model weights.
+        reject = should_reject_general_object(
+            top1=top1,
+            top1_score=top1_score,
+            hard_hits=hard_hits,
+            hard_max=hard_max,
+            plant_max=plant_max,
         )
         reason=f"General vision screening recognized a non-plant object ({top1})." if reject else ""
         return reject,reason,{"top":top,"top1":top1,"top1_score":top1_score,"hard_hits":hard_hits,"plant_hits":plant_hits,"hard_max":hard_max,"plant_max":plant_max}
@@ -1055,7 +1057,7 @@ def vision_gate(img: Image.Image):
 
     decision = decide_vision_gate(
         quality_ok=quality_ok,
-        general_object_rejected=False,
+        general_object_rejected=general_rejected,
         bio_plant_score=float(bio_meta.get("plant_score", bio_plant_score)),
         bio_object_score=float(bio_meta.get("object_score", bio_plant_score - bio_margin)),
         context_plant_score=float(context_plant),
