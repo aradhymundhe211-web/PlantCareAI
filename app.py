@@ -1317,11 +1317,9 @@ with st.sidebar:
             st.session_state.page=name
             st.session_state.analysis=None
             st.rerun()
-    st.markdown('<div class="pc-page-byline" style="justify-content:flex-start;margin:0 0 12px">🌿 Made by <strong>Aradhy Mundhe</strong></div>',unsafe_allow_html=True)
     st.markdown("<br>",unsafe_allow_html=True)
     st.markdown(f'<div class="pc-card" style="padding:16px"><div style="font-size:.72rem;color:#64766b;font-weight:800">PLANT LIBRARY</div><div style="font-size:1.45rem;font-weight:900;color:#0b6b39">{len(PLANTS)} plants</div><div style="font-size:.76rem;color:#64766b;margin-top:5px">Open-source vision model • No paid API key</div></div>',unsafe_allow_html=True)
 
-st.markdown('<div class="pc-page-byline">🌿 Made by <strong>Aradhy Mundhe</strong></div>',unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # Plant reference images
