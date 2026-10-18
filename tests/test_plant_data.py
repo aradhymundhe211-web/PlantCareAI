@@ -170,3 +170,23 @@ def test_benchmark_taxon_aliases_cover_missing_species_names():
 def test_benchmark_uses_the_same_primary_model_as_the_app():
     source = (ROOT / "benchmark_56.py").read_text(encoding="utf-8")
     assert 'for model_id in ("hf-hub:imageomics/bioclip", "hf-hub:imageomics/bioclip-2")' in source
+
+def test_all_high_risk_and_unbenchmarked_species_have_diagnostic_hints():
+    hints = dict(load_model_hints())
+    required = {
+        "Snake Plant": ("Sansevieria trifasciata", "rhizomes"),
+        "Areca Palm": ("Chrysalidocarpus lutescens", "fronds"),
+        "Dracaena Marginata": ("red or burgundy leaf edges", "woody cane-like stems"),
+        "Dwarf Schefflera": ("Heptapleurum arboricola", "radiating from one central point"),
+        "Hibiscus": ("five broad petals", "staminal column"),
+        "Curry Leaf": ("Bergera koenigii", "pinnate compound leaves"),
+        "Lemon": ("Citrus x limon", "simple glossy oval"),
+        "ZZ Plant": ("underground rhizomes", "not segmented bamboo canes"),
+        "Prayer Plant": ("red-pink veins", "not broad round Calathea orbifolia"),
+        "Aglaonema": ("silver or pale green patterned centres", "Dieffenbachia"),
+        "Spinach": ("basal rosette", "no floating circular aquatic leaves"),
+        "Mango": ("alternate simple long narrow", "not pinnate leaflets like neem"),
+    }
+    for name, phrases in required.items():
+        for phrase in phrases:
+            assert phrase.casefold() in hints[name].casefold(), (name, phrase)
