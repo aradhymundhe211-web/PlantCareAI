@@ -55,7 +55,7 @@ def request_json(url, params=None):
 TAXON_ALIASES = {
     "Dracaena trifasciata": ("Dracaena trifasciata", "Sansevieria trifasciata"),
     "Dypsis lutescens": ("Dypsis lutescens", "Chrysalidocarpus lutescens"),
-    "Dracaena marginata": ("Dracaena marginata", "Dracaena reflexa var. angustifolia"),
+    "Dracaena marginata": ("Dracaena marginata", "Dracaena reflexa angustifolia", "Dracaena reflexa var. angustifolia"),
     "Schefflera arboricola": ("Schefflera arboricola", "Heptapleurum arboricola"),
     "Hibiscus rosa-sinensis": ("Hibiscus rosa-sinensis", "Hibiscus x rosa-sinensis", "Hibiscus × rosa-sinensis"),
     "Murraya koenigii": ("Murraya koenigii", "Bergera koenigii"),
