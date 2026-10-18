@@ -9,7 +9,7 @@ Scope
 Confirmed from source
 - plant_data.json contains 56 unique common names and 56 unique scientific names.
 - MODEL_HINTS now contains one non-empty entry for each of the 56 species.
-- Identification currently uses the original BioCLIP only, with prompt-based ranking across two image views, to reduce memory use on Streamlit Community Cloud. This is zero-shot ranking, not a custom-trained 56-class model.
+- Identification currently uses the original BioCLIP only, with prompt-based ranking across up to three image views, to reduce memory use on Streamlit Community Cloud. This is zero-shot ranking, not a custom-trained 56-class model.
 - Camera and gallery inputs share the same image-analysis pipeline after image decoding and orientation correction.
 - Non-plant safeguards include BioCLIP plant/object comparisons, local visual heuristics, and a document-like-image heuristic. The extra MobileNetV3 model was removed from the identification path to reduce memory pressure.
 - Plant-health screening is based on approximate image colour patterns, not a trained disease detector or leaf-segmentation model.
@@ -56,3 +56,12 @@ Follow-up competition-readiness changes (2026-10-18)
 - Changed the result banner so weak/ambiguous matches are not presented as an accepted plant identification. “Needs confirmation” and “Possible match” now have explicit caution states.
 - Added regression coverage for the multi-view policy and uncertainty wording.
 - These changes are intended to improve robustness and avoid overstating uncertain results; their effect on accuracy is not yet measured. Re-run the held-out multi-photo benchmark and test live deployment, including car/object rejection, before making accuracy claims.
+
+
+Follow-up review — 2026-10-18
+- Reviewed the production identification path, plant-presence gate, BioCLIP plant/object policy, species ranking, page navigation and current regression tests.
+- Tightened the rejection policy in plantcare_core.py so ambiguous plant/object evidence is allowed to proceed to species ranking; only stronger non-plant or document evidence is rejected.
+- Added regression tests for ambiguous plant photos, decisive non-plant evidence, clear plant evidence and document rejection.
+- This is a policy hardening change, not proof of improved live accuracy. It can trade some non-plant rejection sensitivity for fewer false rejections of genuine plants; the trade-off must be measured on labelled plant and non-plant photos.
+- The reported live false rejection of Marigold and Tulsi and the Fortuner Legender negative case have not been re-tested on the live site after this change.
+- Live site inspection was not accessible to the available browser tool in this audit, so no claim is made that all deployed pages and interactions were manually verified.
