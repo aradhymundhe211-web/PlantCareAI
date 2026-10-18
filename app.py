@@ -506,9 +506,8 @@ def load_bioclip():
     import open_clip
     # Prefer CPU-safe operation on constrained Streamlit Community Cloud.
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    # BioCLIP 2 is a newer biology foundation model and performs better on
-    # published species-identification benchmarks than the original BioCLIP.
-    # Its checkpoint is much larger, so keep the original as a deployment fallback.
+    # Use the original BioCLIP checkpoint because the newer BioCLIP 2 model
+    # exceeded the available memory budget on Streamlit Community Cloud.
     errors = []
     for model_id in ("hf-hub:imageomics/bioclip",):
         try:
@@ -789,8 +788,8 @@ def bioclip_gate(img: Image.Image):
     import torch
     plant_scores=[]; object_scores=[]
     with torch.no_grad():
-        # This is a safety gate, not the species ranker; two views are sufficient
-        # here because the independent general-object gate has already run.
+        # This is a safety gate, not the species ranker. Two views balance
+        # plant/object screening with the limited memory and CPU budget.
         for view in _analysis_views(img)[:2]:
             x=preprocess(view).unsqueeze(0).to(device)
             f=model.encode_image(x); f=f/f.norm(dim=-1,keepdim=True)
