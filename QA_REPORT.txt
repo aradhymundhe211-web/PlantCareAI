@@ -1,46 +1,38 @@
-PlantCare AI — QA and repair report
-Input: PlantCareAI-main BACKUP.zip uploaded 2026-10-18
+PlantCare AI — audit and repair report (2026-10-18)
 
-Code findings
-- plant_data.json has 56 unique common names and 56 unique scientific names.
-- Model prompt hints cover every one of the 56 supported common names.
-- The original model loader tried BioCLIP 2 before original BioCLIP, risking a large checkpoint download on limited hosting.
-- Critical original bug: vision_gate explicitly allowed uncertain plant evidence to continue to species ranking. Several text/object checks happened after ranking and exceptions could be ignored.
-- Image health analysis is colour-pattern screening, not a trained disease detector.
-- Plant Health Copilot is local profile retrieval/rule-based triage, not a general LLM.
-- The Pl@ntNet client files were present but not imported or called by the website; that unimplemented claim was removed along with the dead helper/test.
+Input inspected: PlantCareAI-main (1).zip uploaded in this conversation.
 
-Changes made
-- Original BioCLIP is the default to reduce memory/startup risk on free CPU hosting. BioCLIP 2 remains an explicit option via PLANTCARE_MODEL_ID after testing a stronger host. Model failure does not silently switch checkpoints or produce guessed species.
-- requirements.txt now pins CPU-only PyTorch 2.5.1+cpu and torchvision 0.20.1+cpu, plus existing app packages.
-- Image gating is now performed before species ranking: quality check, independent ImageNet object screen when weights are available, BioCLIP plant-vs-object check, and plant-vs-document check.
-- Uncertain plant presence, obvious non-plant evidence, poor quality and unavailable model status are handled separately. A failed/uncertain gate does not flow into the 56-species ranker.
-- Screening uses up to three complementary image views to reduce extra CPU work; species ranking retains multiple views.
-- Removed the computed pseudo-confidence percentage. UI labels describe relative rank separation, not a calibrated probability.
-- Copilot follow-up questions inherit an explicitly named plant from previous user messages, without mining assistant-generated examples.
-- Added configurable screening thresholds through environment variables or Streamlit secrets.
-- Corrected Python target documentation to 3.12; added deployment acceptance checklist, presentation demo guide and third-party notices.
+Confirmed in source:
+- plant_data.json contains 56 unique, complete profile records.
+- Model hints exist for all 56 records.
+- Identification uses BioCLIP 2 with original BioCLIP fallback, multi-prompt and multi-view image/text ranking.
+- A MobileNetV3-Small ImageNet screen and BioCLIP text screens are used as non-plant safeguards when the weights are available.
+- Health screening is a colour-mask heuristic, not a trained health classifier.
+- The structured Copilot uses rules and plant profile information.
 
-Local checks completed in this container
-- Container interpreter: Python 3.13.5 (not Python 3.12).
-- `python -m py_compile app.py plantcare_core.py test_plantcare_core.py test_plantcare_vision.py test_plantcare_pipeline.py`: PASS.
-- `python -m unittest discover -s . -v`: 21 tests passed.
-- Static audit: 56 profiles; 56 unique common names; 56 unique scientific names; all 56 species have model hints; source wiring calls `vision_gate` before `optional_vision_rank`: PASS.
-- ZIP archive integrity: verified with `unzip -t` after packaging.
-- Dependency resolver dry-run for Python 3.12: NOT VERIFIED. It timed out while unable to resolve DNS for package indexes; this was an environment/network limitation, not a proven dependency conflict or a successful install.
+Repairs in this build:
+- Removed the local colour/manual-clue fallback that could create unsupported species shortlists when the vision model failed. It now returns an explicit unavailable result instead of a species guess.
+- Removed the numerical PlantCare Score because the underlying evidence cannot support a valid overall health/care score.
+- Removed the percentage-style presentation of identification confidence; the UI explains that the category is a relative ranking signal, not a calibrated probability.
+- Added a chat-style profile-grounded Copilot that does not require a paid AI inference API.
+- Updated Python dependency pins for a more consistent Python 3.11 environment, including NumPy 1.26.4 with the pinned PyTorch version.
+- Removed the unused optional Pl@ntNet client and its tests from this no-paid-API build.
+- Updated documentation to state limits and test commands accurately.
 
-Not verified / required after deployment
-- This environment does not have Streamlit or OpenCLIP installed; no app-server or browser smoke test was run.
-- Neither BioCLIP checkpoint was downloaded. No live model inference was run.
-- The actual Fortuner Legender image and PlantCare AI dashboard screenshot were not included as fixtures, so no claim is made that those exact images were rejected by a live model.
-- No measured peak RAM, actual CPU latency, startup time, or independent 56-class accuracy result is available.
-- The image-gate unit tests validate policy decisions from simulated scores; they are not image-level false-positive tests.
+Local verification:
+- Python syntax compilation passed.
+- Lightweight unit tests passed (see terminal verification during build).
+- ZIP archive integrity checked after packaging.
 
-Mandatory post-deploy acceptance tests
-1. Open the app and check Streamlit logs for dependency/model-download/memory failures.
-2. Test several genuine plant photos: whole plant, leaf close-up, and flower; include different lighting and backgrounds.
-3. Test the actual car photo, dashboard screenshot, unrelated objects, a plant outside the 56 classes, and a low-quality image.
-4. Test both camera and gallery paths.
-5. Test Copilot direct and follow-up questions.
-6. Confirm the health screen describes colour patterns and physical checks, not a confirmed disease diagnosis.
-7. Tune screening thresholds only against a labelled positive/negative test set; do not lower them merely to force more outputs.
+Not verified:
+- Streamlit was not installed in the audit environment; no full browser/server smoke test was run.
+- open_clip_torch was not installed; BioCLIP weights were not downloaded and live inference was not run.
+- No independent labelled image set for the 56 classes was supplied; accuracy cannot be certified.
+- The model checkpoints may exceed free-hosting memory, disk, network or startup limits.
+- Car/non-plant rejection has not been validated on a held-out test set; safeguards are not infallible.
+
+Required next validation after deployment:
+1. Check Streamlit logs for dependency/model-loading errors.
+2. Test camera and gallery with the same known plant photos.
+3. Test cars, people, indoor objects, non-supported plants, text screenshots, blurred/dark photos.
+4. Build a held-out, correctly labelled image set for all 56 classes and report per-class precision/recall, confusion matrix, and non-plant false-accept rate before making accuracy claims.
