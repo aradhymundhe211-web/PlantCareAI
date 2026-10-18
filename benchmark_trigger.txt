@@ -1,0 +1,1 @@
+Trigger the isolated real-photo benchmark workflow for all supported PlantCare AI classes.
