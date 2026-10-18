@@ -240,7 +240,7 @@ def load_model(requested_device="auto"):
         raise RuntimeError("CUDA was requested but is not available in this Python environment.")
     device = ("cuda" if torch.cuda.is_available() else "cpu") if requested_device == "auto" else requested_device
     errors = []
-    for model_id in ("hf-hub:imageomics/bioclip-2", "hf-hub:imageomics/bioclip"):
+    for model_id in ("hf-hub:imageomics/bioclip",):
         try:
             model, _, preprocess = open_clip.create_model_and_transforms(model_id)
             tokenizer = open_clip.get_tokenizer(model_id)
