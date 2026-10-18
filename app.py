@@ -16,7 +16,7 @@ APP_DIR = Path(__file__).resolve().parent
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
-from plantcare_core import assess_plant_health, answer_copilot_question, validate_plant_records
+from plantcare_core import assess_plant_health, answer_copilot_question, validate_plant_records, decide_vision_gate
 
 import numpy as np
 import requests
@@ -1633,32 +1633,35 @@ elif page=="Identify a Plant":
                             # those checks cannot produce a usable result.
                             general_meta = {"gate_unavailable": type(gate_exc).__name__}
                             reject_object = False
+                        # Run the BioCLIP safety screen once before species ranking.
+                        # Ambiguous safety evidence is allowed through; only decisive
+                        # non-plant/document evidence blocks the species classifier.
+                        if not reject_object:
+                            try:
+                                _, bio_plant_score, _, object_meta = bioclip_gate(image)
+                                bio_object_score = float(object_meta.get("object_score", 0.0))
+                                accepted, bio_reason, bio_category = decide_vision_gate(
+                                    quality_ok=True,
+                                    general_object_rejected=False,
+                                    bio_plant_score=float(bio_plant_score),
+                                    bio_object_score=bio_object_score,
+                                    document_score=_document_visual_score(image),
+                                )
+                                if not accepted:
+                                    reject_object = True
+                                    object_reason = bio_reason
+                            except Exception:
+                                # Model-screen failure is not proof that the image is
+                                # non-plant; let species matching attempt a result.
+                                pass
+
                         if reject_object:
                             st.session_state.analysis = {"nonplant": True, "reason": object_reason, "score": 0.0}
                         else:
                             ai_rows, model_used, model_error = optional_vision_rank(image, st.session_state.get("selected_image_name", ""))
-                            if not reject_object and model_used and ai_rows:
+                            if model_used and ai_rows:
                                 rows=ai_rows
-                                # One BioCLIP plant-vs-object pass replaces two repeated
-                                # multi-view screens. The independent general-object gate
-                                # already ran before species ranking. Reject only decisive
-                                # non-plant evidence; uncertain cases must not be auto-rejected.
-                                try:
-                                    _, _, plant_object_margin, object_meta = bioclip_gate(image)
-                                    object_score = float(object_meta.get("object_score", 0.0))
-                                    if object_score >= 24.0 and plant_object_margin <= -1.0:
-                                        reject_object = True
-                                        object_reason = "The image is much more consistent with a non-plant object than with a living plant."
-                                except Exception:
-                                    # A failed optional safety model is not proof of a
-                                    # non-plant. Keep the species result subject to its
-                                    # normal uncertainty label.
-                                    pass
-
-                                if reject_object:
-                                    st.session_state.analysis={"nonplant":True,"reason":object_reason,"score":0.0}
-                                else:
-                                    if clues:
+                                if clues:
                                         adjusted=[]
                                         for p,s in rows:
                                             txt=" ".join(str(p.get(k,"")) for k in ["common_name","category","identification","leaf","flower","growth","similar"]).lower()
