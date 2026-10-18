@@ -1,3 +1,5 @@
+# PlantCareAI requirements (cleaned)
+# CPU-only PyTorch wheel index is retained for constrained hosts.
 streamlit==1.64.0
 Pillow==11.3.0
 numpy==1.26.4
