@@ -510,7 +510,7 @@ def load_bioclip():
     # published species-identification benchmarks than the original BioCLIP.
     # Its checkpoint is much larger, so keep the original as a deployment fallback.
     errors = []
-    for model_id in ("hf-hub:imageomics/bioclip-2", "hf-hub:imageomics/bioclip"):
+    for model_id in ("hf-hub:imageomics/bioclip", "hf-hub:imageomics/bioclip-2"):
         try:
             model, _, preprocess = open_clip.create_model_and_transforms(model_id)
             tokenizer = open_clip.get_tokenizer(model_id)
