@@ -49,3 +49,10 @@ How to run the real-photo benchmark locally
 
 Accuracy claims
 - Do not claim 100% accuracy. The current measured result is preliminary, covers 49 classes with one photo each, and has known errors. Accuracy across all 56 species and non-plant rejection remain unverified.
+
+
+Follow-up competition-readiness changes (2026-10-18)
+- Aligned production species ranking with the benchmark's up-to-three-view strategy: full frame, vegetation-focused crop when available, and a context crop. The fast object gate still uses at most two views to limit latency.
+- Changed the result banner so weak/ambiguous matches are not presented as an accepted plant identification. “Needs confirmation” and “Possible match” now have explicit caution states.
+- Added regression coverage for the multi-view policy and uncertainty wording.
+- These changes are intended to improve robustness and avoid overstating uncertain results; their effect on accuracy is not yet measured. Re-run the held-out multi-photo benchmark and test live deployment, including car/object rejection, before making accuracy claims.
