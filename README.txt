@@ -1,38 +1,44 @@
-PLANTCARE AI — audited repair build
-Created by Aradhy Mundhe
+PlantCare AI — deployment and usage guide
 
-WHAT THIS BUILD DOES
-- Includes 56 plant profiles in plant_data.json.
-- Supports camera capture and gallery image upload through the same analysis path.
-- Uses BioCLIP 2 with an original BioCLIP fallback for zero-shot image/text ranking against the 56 profile classes.
-- Applies non-plant safeguards where the relevant local model weights are available.
-- If the vision model is unavailable, it does not guess a species from image colour or manually selected clues.
-- Includes a visible-colour screening panel and a guided symptom-and-condition assessment. These are cautious screening aids, not a disease diagnosis.
-- Adds a chat-style local Copilot that retrieves plant-care facts from the bundled profiles and uses simple rules for common symptom questions. It does not require a paid AI inference API.
-- Includes the plant library, search, My Plants, reminders and session-scoped journal.
+Purpose
+- Streamlit website for 56 plant profiles, photo-based species suggestions, visual colour-pattern screening, care checklists, and a profile-grounded Plant Health Copilot.
+- Both camera photos and gallery uploads use the same image normalization and validation pipeline.
+- No paid AI inference API key is required.
 
-IMPORTANT ACCURACY BOUNDARY
-Having 56 profiles does not mean the model has been trained or validated to identify all 56 accurately. The image model uses zero-shot similarity, not a custom-trained classifier. The displayed category is a relative ranking signal, not a calibrated probability. No labelled held-out dataset for the 56 species was supplied, so species accuracy is not certified. The health panel is based on colour patterns; it cannot confirm disease, detect pests reliably, or measure soil/root/nutrient conditions. The Copilot is profile-grounded and rule-based, not a general language model.
+Model selection
+- Official model pages: https://huggingface.co/imageomics/bioclip and https://huggingface.co/imageomics/bioclip-2. See THIRD_PARTY_NOTICES.txt for licence pointers.
+- Default: original BioCLIP (`hf-hub:imageomics/bioclip`) through OpenCLIP. Its model repository is about 602 MB overall; the main checkpoint is roughly 599 MB.
+- BioCLIP 2 is available as an opt-in on hosts with enough memory/disk, using `PLANTCARE_MODEL_ID=hf-hub:imageomics/bioclip-2`. Its main checkpoint is about 1.71 GB and the repository totals about 3.42 GB because it contains alternative checkpoint formats.
+- Do not enable BioCLIP 2 on a constrained free host without testing clean startup, peak memory, inference latency, and image-level accuracy. To opt in, define `PLANTCARE_MODEL_ID` as `hf-hub:imageomics/bioclip-2` in the server environment or Streamlit secrets. Model weights download at runtime; they are not bundled in this ZIP.
+- Model choice is explicit and no silent fallback to a larger checkpoint occurs. If model loading fails, the app reports identification unavailable rather than inventing a species.
 
-NO PAID AI API
-The identification and Copilot features do not call a paid AI inference API. Model weights are downloaded from the model host at runtime, so first startup requires network access and enough disk/RAM. Public reference photos may be retrieved from iNaturalist/Wikipedia. This is not fully offline and does not promise offline startup.
+Environment
+- Python target: 3.12 (`.python-version`).
+- `requirements.txt` pins CPU-only PyTorch and matching torchvision to avoid attempting to install CUDA packages on a CPU-only hosting service.
+- The first model use requires internet access and enough disk/cache space. Every visitor does not download the entire model; inference happens on the Streamlit server.
 
-DEPLOY TO STREAMLIT COMMUNITY CLOUD
-1. Extract this ZIP.
-2. Upload the CONTENTS of PlantCareAI-main to the root of your GitHub repository, not the outer folder itself. Preserve .streamlit/config.toml.
-3. Commit and push the changes.
-4. In Streamlit Community Cloud, open the app and wait for the build to finish.
-5. Inspect Manage app > Logs if the app fails. Model weight downloads can be large and may exceed free hosting memory/storage or startup limits.
-6. Test clear plant photos, the same photo from camera and gallery, a car photo, a non-supported plant, and a blurry image. If the model does not load, the app should report identification unavailable instead of guessing.
+Run locally
+1. Create/activate a Python 3.12 virtual environment.
+2. Install dependencies: `python -m pip install -r requirements.txt`
+3. Run tests: `python -m unittest discover -s . -v`
+4. Start the app: `streamlit run app.py`
 
-RUN LOCALLY
-Use Python 3.11.11 (see .python-version), install requirements, then run:
-  python -m pip install -r requirements.txt
-  streamlit run app.py
+Identification pipeline
+1. Image quality screening.
+2. General ImageNet object screening when its torchvision weights are available.
+3. BioCLIP plant-versus-object and plant-versus-document checks.
+4. Only images that pass positive plant-presence evidence proceed to 56-species zero-shot ranking.
+5. An uncertain or unavailable check does not receive a species name.
 
-TESTS
-Run from the project root:
-  python -m py_compile app.py plantcare_core.py test_plantcare_core.py
-  python -m unittest discover -s . -v
+Important limits
+- Gate thresholds are initial hand-set screening thresholds, not statistically calibrated probabilities. Test and tune them using independent real plant photos and non-plant photos before claiming accuracy.
+- BioCLIP ranks the supported candidate species; it is not a guarantee that the true species is among the 56 labels or that the top-ranked class is correct.
+- No independent labelled test set covering all 56 species is included. Do not claim a validated accuracy percentage until such a test has been run.
+- Visual health screening detects rough colour patterns only. It does not segment leaves, diagnose a disease, reliably detect pests, or measure soil moisture/nutrients.
+- The Copilot retrieves advice from bundled plant profiles and transparent rules. It is not a general-purpose generative language model or a laboratory diagnosis.
+- Free hosting has finite memory, CPU, disk, bandwidth, startup time, and availability. Unlimited uptime or inference cannot be promised.
 
-The lightweight tests validate profile structure and rule-based Copilot behaviour. They do not test live model inference or certify image accuracy.
+After deploying
+- Watch Streamlit logs for dependency, model-download, and memory failures.
+- Test a clear plant photo, leaf close-up, flower, the Fortuner/car image, dashboard screenshots, unrelated objects, a blurry photo, and the Copilot.
+- If a real plant is rejected, test the model-gate scores against a separate set of labelled plant photos before loosening thresholds.
