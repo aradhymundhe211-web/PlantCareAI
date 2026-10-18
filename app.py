@@ -521,8 +521,6 @@ def load_bioclip():
 
 
 MODEL_HINTS = {
-    "Tulsi": "holy basil, tulasi, aromatic herb, opposite oval serrated leaves, purple or green stems, small flower spikes",
-    "Mint": "mint herb, opposite serrated oval leaves, aromatic leafy herb, spreading stems",
     "Mango": "mango tree, Mangifera indica, long narrow lanceolate leaves, woody tree, mango fruit",
     "Marigold": "marigold, Tagetes erecta, yellow or orange round flower heads, pinnate foliage",
     "Rose": "rose, Rosa, woody shrub with serrated oval leaflets and distinctive rose flowers",
@@ -823,24 +821,21 @@ def _focus_crop(img: Image.Image) -> Image.Image | None:
 
 
 def _analysis_views(img: Image.Image) -> List[Image.Image]:
-    """Build a small, consistent set of full-frame and plant-focused views."""
+    """Build full-frame, vegetation-focused, and context crops in that order."""
     im=ImageOps.exif_transpose(img).convert("RGB")
     # Standardize orientation/size before either camera or gallery reaches the model.
     im.thumbnail((1600,1600),Image.Resampling.LANCZOS)
     views=[im]
     w,h=im.size
+    # Put the plant-focused crop second: the fast non-plant gate examines the
+    # first two views, so it must see vegetation rather than only a centre crop.
+    focus=_focus_crop(im)
+    if focus is not None:
+        views.append(focus)
     side=int(min(w,h)*.78)
     if side>=160:
         left=max(0,(w-side)//2); top=max(0,(h-side)//2)
         views.append(im.crop((left,top,left+side,top+side)))
-    # Prioritize the vegetation-focused crop so it remains in the three-view budget.
-    focus=_focus_crop(im)
-    if focus is not None:
-        views.append(focus)
-        fw,fh=focus.size
-        side2=int(min(fw,fh)*.90)
-        if side2>=160:
-            views.append(focus.crop(((fw-side2)//2,(fh-side2)//2,(fw+side2)//2,(fh+side2)//2)))
     if h>220:
         views.append(im.crop((0,0,w,int(h*.82))))
     return views[:3]
@@ -933,18 +928,24 @@ def general_object_screen(img_bytes: bytes):
         plant_max=max((score for _,score in plant_hits),default=0.0)
         top1=top[0][0] if top else ""
         top1_score=top[0][1] if top else 0.0
-        # Hard everyday-object evidence wins unless there is similarly strong
-        # botanical evidence. This specifically prevents vehicles/people/etc.
-        # from reaching the 56-class BioCLIP species matcher.
+        # Count object evidence per view instead of letting one crop's guess
+        # veto the whole image. This is important for plants photographed in pots,
+        # on shelves, or beside people/furniture.
+        strong_object_views=0
+        for vote in votes:
+            view_hard=max((score for name,score in vote
+                           if any(term in name for term in hard_nonplant)),default=0.0)
+            view_plant=max((score for name,score in vote
+                            if any(term in name for term in plant_terms)),default=0.0)
+            if view_hard >= 0.32 and view_plant < 0.12:
+                strong_object_views += 1
+        # Reject repeated, strong non-plant evidence; allow a single ambiguous
+        # generic-object label to proceed to the botanical classifier.
         reject=bool(
-            hard_hits and
-            (
-                # Potted plants often trigger ImageNet labels such as vase or pot.
-                # Reject only when object evidence is strong and no plant-like label
-                # competes with it; a weak generic object guess is not enough.
-                (top1 in {n for n,_ in hard_hits} and top1_score >= 0.32 and plant_max < 0.12) or
-                (hard_max >= 0.40 and hard_max >= plant_max * 1.60) or
-                (hard_max >= 0.58 and plant_max < 0.20)
+            hard_hits and (
+                (strong_object_views >= 2 and hard_max >= 0.32 and plant_max < 0.20) or
+                (hard_max >= 0.72 and plant_max < 0.12) or
+                (hard_max >= 0.62 and plant_max < 0.08)
             )
         )
         reason=f"General vision screening recognized a non-plant object ({top1})." if reject else ""
