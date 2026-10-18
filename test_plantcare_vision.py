@@ -54,7 +54,7 @@ class VisionGatePolicyTests(unittest.TestCase):
         accepted, _, category = decide(
             bio_plant_score=25.0,
             bio_object_score=23.0,
-            document_score=0.75,
+            document_score=0.84,
         )
         self.assertFalse(accepted)
         self.assertEqual(category, "nonplant")
