@@ -40,6 +40,10 @@ def test_library_has_56_complete_unique_records():
         for field in REQUIRED_PLANT_FIELDS:
             assert str(plant.get(field, "")).strip(), (plant["common_name"], field)
 
+    assert len({p["identification"] for p in records}) == 56
+    assert len({p["leaf"] for p in records}) >= 50
+    assert len({p["growth"] for p in records}) >= 30
+
 
 def test_every_species_has_one_nonempty_model_hint():
     records = load_records()
