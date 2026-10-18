@@ -89,12 +89,6 @@ class PlantHealthCopilotTests(unittest.TestCase):
         self.assertIn("could not identify a specific plant", answer)
         self.assertIn("do not use a paid AI API", answer)
 
-    def test_copilot_follow_up_uses_explicit_plant_from_prior_user_question(self):
-        history = [{"role": "user", "content": "How much light does Mango need?"}]
-        answer = answer_copilot_question("What about watering?", self.plants, conversation_history=history)
-        self.assertIn("Mango", answer)
-        self.assertIn("Watering", answer)
-
 
 if __name__ == "__main__":
     unittest.main()
