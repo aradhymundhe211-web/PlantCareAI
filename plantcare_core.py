@@ -22,6 +22,52 @@ REQUIRED_PLANT_FIELDS = (
 )
 
 
+def decide_vision_gate(
+    *,
+    quality_ok: bool,
+    general_object_rejected: bool,
+    bio_plant_score: float,
+    bio_object_score: float,
+    context_plant_score: float,
+    context_text_score: float,
+    document_score: float,
+    minimum_bio_plant_score: float = 18.0,
+    minimum_bio_margin: float = 1.5,
+    context_text_threshold: float = 31.0,
+    context_negative_margin: float = -2.0,
+    document_score_threshold: float = 0.72,
+    document_margin_threshold: float = 3.0,
+) -> tuple[bool, str, str]:
+    """Apply conservative, uncalibrated rules before species ranking.
+
+    Similarity values are raw image/text evidence, not probabilities. Thresholds
+    are initial safety thresholds, not statistically calibrated values; validate
+    them on independent plant and non-plant photographs before claiming accuracy.
+    The essential policy is fail-closed: ambiguous evidence must not be passed to
+    the 56-species ranker as if plant presence had been confirmed.
+    """
+    if not quality_ok:
+        return False, "Photo quality is insufficient for a reliable plant check.", "quality"
+    if general_object_rejected:
+        return False, "A general-object model strongly indicated that this is not a plant photo.", "nonplant"
+
+    bio_margin = float(bio_plant_score) - float(bio_object_score)
+    context_margin = float(context_plant_score) - float(context_text_score)
+
+    if float(context_text_score) >= float(context_text_threshold) and context_margin <= float(context_negative_margin):
+        return False, "The image looks more like text, a screenshot, or a document than a plant photograph.", "nonplant"
+    if float(document_score) >= float(document_score_threshold) and context_margin < float(document_margin_threshold):
+        return False, "The image appears document-like and plant presence could not be verified.", "nonplant"
+
+    if float(bio_plant_score) < float(minimum_bio_plant_score) or bio_margin < float(minimum_bio_margin) or (
+        float(bio_object_score) >= 24.0 and bio_margin <= -1.0
+    ):
+        return False, "Plant presence could not be verified confidently. Try a closer, clearer photo containing leaves, flowers, or the whole plant.", "uncertain"
+
+    return True, "Plant presence supported by the vision validation stage.", "accepted"
+
+
+
 def validate_plant_records(records: Iterable[dict[str, Any]], expected_count: int = 56) -> list[str]:
     """Return validation errors for the plant library; an empty list means valid."""
     rows = list(records)
@@ -204,7 +250,11 @@ def assess_plant_health(
     }
 
 
-def answer_copilot_question(question: str, plants: Iterable[dict[str, Any]]) -> str:
+def answer_copilot_question(
+    question: str,
+    plants: Iterable[dict[str, Any]],
+    conversation_history: Iterable[dict[str, Any]] | None = None,
+) -> str:
     """Answer common care questions using only the supplied plant library.
 
     This is deterministic retrieval, not a generative model or a disease diagnosis.
@@ -215,7 +265,9 @@ def answer_copilot_question(question: str, plants: Iterable[dict[str, Any]]) -> 
     if not q:
         return "Ask a plant-care question, such as ‘How often should I water Tulsi?’ or ‘What light does a Mango tree need?’"
 
-    # Match an explicit common or scientific name only; do not infer a species.
+    # Prefer an explicit plant name in the current question. For follow-ups,
+    # inherit only a plant explicitly mentioned by an earlier user message, never
+    # names from assistant examples or generated answer text.
     named = []
     for plant in rows:
         common = str(plant.get("common_name", "")).strip()
@@ -225,6 +277,24 @@ def answer_copilot_question(question: str, plants: Iterable[dict[str, Any]]) -> 
         elif scientific and scientific.casefold() in q:
             named.append((len(scientific), plant))
     plant = max(named, key=lambda item: item[0])[1] if named else None
+    if plant is None and conversation_history:
+        history_rows = list(conversation_history)
+        # Recent explicit user mentions supply continuity for follow-up questions.
+        for message in reversed(history_rows[-12:]):
+            if not isinstance(message, dict) or message.get("role") != "user":
+                continue
+            old_q = str(message.get("content", "")).casefold()
+            old_matches = []
+            for candidate in rows:
+                common = str(candidate.get("common_name", "")).strip()
+                scientific = str(candidate.get("scientific_name", "")).strip()
+                if common and common.casefold() in old_q:
+                    old_matches.append((len(common), candidate))
+                elif scientific and scientific.casefold() in old_q:
+                    old_matches.append((len(scientific), candidate))
+            if old_matches:
+                plant = max(old_matches, key=lambda item: item[0])[1]
+                break
 
     if any(term in q for term in ("yellow", "wilting", "wilt", "brown leaves", "spots", "disease", "sick", "dying", "pest", "insect", "mold", "mould")):
         base = (
