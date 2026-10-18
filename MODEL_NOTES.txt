@@ -1,15 +1,17 @@
-PlantCare AI model notes
+PlantCare AI — model and evidence notes
 
-Primary model: BioCLIP 2 (open-source biology vision-language model)
-Fallback model: Original BioCLIP
-Classification approach: prompt ensembles + multi-view image ranking over 56 supported plant records.
-Non-plant safeguards: general ImageNet object classifier when its weights load, plus a text/document screen. The app defers uncertain plant-vs-object cases to species matching rather than rejecting a plant on uncertain evidence.
+Species library: 56 plant records in plant_data.json.
+Identification model: BioCLIP 2 is attempted first; original BioCLIP is the fallback.
+Inference: open_clip image/text embeddings with botanical prompt descriptions and multiple image views. This is zero-shot ranking, not a custom-trained 56-class classifier.
+Non-plant safeguards: ImageNet MobileNetV3-Small object screen (when weights are available), BioCLIP plant/object comparisons, and a document-like-image screen.
+Camera/gallery parity: both inputs are decoded, EXIF-corrected and sent through the same image analysis functions.
+No paid AI inference API is used by the identification or Copilot features. Model weights are downloaded at runtime, so initial startup needs network access and sufficient memory/storage. Reference photos in the library may also be fetched from public iNaturalist/Wikipedia endpoints.
 
 Important limits
-- Model weights are downloaded at runtime; first use needs internet access.
-- BioCLIP 2 weights are large; hosting storage/memory can be limiting.
-- The 56-class list limits output to those classes and does not cover every plant species.
-- Similar species, poor lighting, distant subjects, mixed images and unusual growth stages may be misidentified.
-- Displayed match scores are not calibrated probabilities.
-- Plant Health Copilot gives symptom and care guidance, not laboratory disease diagnosis.
-- Do not describe this app as 100% accurate or fully offline.
+- The 56 names are supported candidate classes, not proof that every class can be identified accurately.
+- No project-specific labelled dataset or independent 56-class benchmark is included.
+- Displayed model ranking is not a calibrated probability.
+- A model-loading failure now produces an unavailable result rather than a species guess from colour/manual clues.
+- Visual health screening is a coarse colour-pattern screen, not leaf segmentation, disease recognition, pest detection, or measurement of soil moisture/nutrients.
+- Plant Health Copilot is a local profile-retrieval and rule-based assistant, not a general-purpose language model or laboratory diagnosis.
+- Never claim 100% accuracy. Validate using held-out photos from different devices, backgrounds, plant ages and lighting, plus non-plants and unsupported plants.
