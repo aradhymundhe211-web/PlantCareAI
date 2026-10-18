@@ -1,17 +1,28 @@
 PlantCare AI — model and evidence notes
 
-Species library: 56 plant records in plant_data.json.
-Identification model: BioCLIP 2 is attempted first; original BioCLIP is the fallback.
-Inference: open_clip image/text embeddings with botanical prompt descriptions and multiple image views. This is zero-shot ranking, not a custom-trained 56-class classifier.
-Non-plant safeguards: ImageNet MobileNetV3-Small object screen (when weights are available), BioCLIP plant/object comparisons, and a document-like-image screen.
-Camera/gallery parity: both inputs are decoded, EXIF-corrected and sent through the same image analysis functions.
-No paid AI inference API is used by the identification or Copilot features. Model weights are downloaded at runtime, so initial startup needs network access and sufficient memory/storage. Reference photos in the library may also be fetched from public iNaturalist/Wikipedia endpoints.
+Selected default
+- Original BioCLIP: `hf-hub:imageomics/bioclip`, MIT licence, zero-shot biological image/text matching via OpenCLIP.
+- Reason for default: resource-conscious choice for a free CPU-hosted Streamlit app. The checkpoint is approximately 599 MB; the Hugging Face repository totals approximately 602 MB.
+- Optional BioCLIP 2: `hf-hub:imageomics/bioclip-2`, MIT licence, stronger published species-classification benchmark results than original BioCLIP. One supported checkpoint is approximately 1.71 GB; the repository totals approximately 3.42 GB because it contains two checkpoint formats. It is not the default because actual peak memory/startup on the target free hosting has not been measured.
+- Set `PLANTCARE_MODEL_ID=hf-hub:imageomics/bioclip-2` only on a host where a clean start, peak memory, latency, and image-level evaluation have passed. Otherwise leave the variable unset.
 
-Important limits
-- The 56 names are supported candidate classes, not proof that every class can be identified accurately.
-- No project-specific labelled dataset or independent 56-class benchmark is included.
-- Displayed model ranking is not a calibrated probability.
-- A model-loading failure now produces an unavailable result rather than a species guess from colour/manual clues.
-- Visual health screening is a coarse colour-pattern screen, not leaf segmentation, disease recognition, pest detection, or measurement of soil moisture/nutrients.
-- Plant Health Copilot is a local profile-retrieval and rule-based assistant, not a general-purpose language model or laboratory diagnosis.
-- Never claim 100% accuracy. Validate using held-out photos from different devices, backgrounds, plant ages and lighting, plus non-plants and unsupported plants.
+Identification pipeline
+- Builds a text prompt set for each of the 56 supported plant profiles and ranks normalized image/text embeddings across multiple views.
+- Before ranking, requires quality checks, general ImageNet object-screen evidence when available, BioCLIP plant-vs-object evidence, and a plant-vs-document check.
+- The general object model uses torchvision MobileNetV3-Small with official ImageNet weights. If those weights cannot load, the independent gate is unavailable; BioCLIP gates still must pass. If BioCLIP validation fails, the app refuses to produce a species name.
+- Filename is not used to choose a species.
+- Relative candidate scores and ranking labels are not calibrated probabilities.
+
+Thresholds and validation
+- Initial plant-presence thresholds: plant similarity >= 18.0 and plant-vs-object margin >= 1.5 on scores scaled as cosine similarity x 100; reject document-like photos when the context and document heuristics agree. Thresholds can be overridden through environment variables or Streamlit secrets: PLANTCARE_GATE_MIN_PLANT_SCORE, PLANTCARE_GATE_MIN_MARGIN, PLANTCARE_GATE_CONTEXT_TEXT_SCORE, PLANTCARE_GATE_CONTEXT_NEGATIVE_MARGIN, PLANTCARE_GATE_DOCUMENT_SCORE, and PLANTCARE_GATE_DOCUMENT_MARGIN. Defaults are hand-set screening thresholds, not calibrated thresholds.
+- Policy-level unit tests validate the gate logic but are not a substitute for real-image tests. This build has not been run against a labelled independent image set, the exact car photo, or the exact dashboard screenshot in live inference.
+
+Visual health monitoring
+- Colour-mask heuristic that reports rough green/yellow/brown pixel patterns after a vegetation-focused crop where one can be found. It is not a trained disease model, leaf segmentation, pest detector, or diagnosis.
+
+Plant Health Copilot
+- Local profile retrieval plus rule-based symptom triage. Follow-up questions can inherit an explicit plant mentioned in a previous user message. It does not require paid AI APIs and is not a general-purpose LLM.
+
+Hosting / privacy / limits
+- Model weights download at runtime, first use requires network access and disk space. PyTorch is pinned to CPU wheels in requirements to avoid CUDA dependencies on CPU-only hosting.
+- Real-world accuracy, live Streamlit deployment, peak RAM, model download success, and CPU inference latency remain unverified until tested on the target deployment.
