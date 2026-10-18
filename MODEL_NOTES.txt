@@ -1,7 +1,7 @@
 PlantCare AI — model and evidence notes
 
 Species library: 56 plant records in plant_data.json.
-Identification model: BioCLIP 2 is attempted first; original BioCLIP is the fallback.
+Identification model: original BioCLIP only (chosen to reduce memory pressure on Streamlit Community Cloud).
 Inference: open_clip image/text embeddings with botanical prompt descriptions and multiple image views. This is zero-shot ranking, not a custom-trained 56-class classifier.
 Non-plant safeguards: ImageNet MobileNetV3-Small object screen (when weights are available), BioCLIP plant/object comparisons, and a document-like-image screen.
 Camera/gallery parity: both inputs are decoded, EXIF-corrected and sent through the same image analysis functions.
