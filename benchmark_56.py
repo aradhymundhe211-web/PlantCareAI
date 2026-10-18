@@ -195,6 +195,32 @@ def prompts_for(plant, hint):
             "Mentha spicata botanical field photograph with narrow terminal flower spikes",
             "mint herb growing in a garden, paired serrated leaves on a spreading stem",
         ])
+    elif common == "Peace Lily":
+        prompts.extend([
+            "Spathiphyllum peace lily with white hood-shaped spathe and central spadix above a basal clump of glossy green leaves",
+            "close-up of peace lily foliage, broad glossy lance-shaped leaves with prominent midrib, white spathe flower if present",
+            "peace lily houseplant in a pot, not a calla lily, not a white flower bouquet",
+        ])
+    elif common == "Lucky Bamboo":
+        prompts.extend([
+            "Dracaena sanderiana lucky bamboo, green cane stalks with visible horizontal ring nodes and narrow leaves emerging from nodes",
+            "lucky bamboo houseplant with segmented canes arranged in spirals or bundles, often rooted in water, not Bambusa bamboo",
+        ])
+    elif common == "Spinach":
+        prompts.extend([
+            "Spinacia oleracea spinach, edible leafy vegetable in a low basal rosette, smooth tender oval or arrow-shaped leaves",
+            "close-up of spinach leaves and petioles, soft smooth green foliage, no woody trunk and no deeply lobed papaya leaves",
+        ])
+    elif common == "Cucumber":
+        prompts.extend([
+            "Cucumis sativus cucumber vine with rough palmately lobed leaves, coiling tendrils, yellow flowers and elongated green cucumber fruits",
+            "close-up of cucumber plant leaves with five angular lobes and rough texture, climbing cucurbit vine, not okra",
+        ])
+    elif common == "Prayer Plant":
+        prompts.extend([
+            "Maranta leuconeura prayer plant with oval patterned leaves and red veins radiating from the midrib",
+            "close-up of prayer plant foliage with dark green patches, lighter green background and red-pink veins, not Calathea orbifolia",
+        ])
     profile_traits = " ".join(
         str(plant.get(k, "")).strip()
         for k in ("leaf", "flower", "growth")
