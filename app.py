@@ -504,6 +504,7 @@ def load_bioclip():
     """
     import torch
     import open_clip
+    # Prefer CPU-safe operation on constrained Streamlit Community Cloud.
     device = "cuda" if torch.cuda.is_available() else "cpu"
     # BioCLIP 2 is a newer biology foundation model and performs better on
     # published species-identification benchmarks than the original BioCLIP.
