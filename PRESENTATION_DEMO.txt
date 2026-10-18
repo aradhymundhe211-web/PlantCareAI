@@ -1,0 +1,13 @@
+PLANTCARE AI — 60–90 SECOND DEMONSTRATION SCRIPT
+
+1. “PlantCare AI is a plant-learning and care-support website with a library of 56 plant profiles.” Open the home page and plant library.
+
+2. “A user can take a photo or upload one from a gallery. Before species matching, the app runs image-quality and plant-presence checks. If it cannot verify a plant, it should ask for a clearer image rather than force a guess.” Upload a clear supported plant photo and show the top candidate plus alternatives.
+
+3. “The visual health screen reports approximate visible colour patterns. It does not claim to prove a disease or measure soil moisture.” Show the yellow/brown pixel screen and its explanation, if this page loads correctly.
+
+4. “The Plant Health Copilot uses the plant profiles and rule-based care checks without requiring a paid AI API. It can answer care questions and ask the user to physically check soil, drainage and leaves.” Ask a watering or light question.
+
+5. “PlantCare AI is a decision-support tool. Similar plants can look alike, so results are presented as relative matches, not guaranteed botanical diagnoses.”
+
+Only demonstrate a feature after checking that it works on the live site. Do not claim 100% accuracy, validated disease diagnosis, or a tested result for every species unless actual measurements support those statements.

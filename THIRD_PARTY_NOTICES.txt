@@ -1,0 +1,24 @@
+THIRD-PARTY MODEL / SOFTWARE NOTICES
+
+BioCLIP (default model)
+- Model repository: https://huggingface.co/imageomics/bioclip
+- The model repository identifies the model license as MIT.
+- Model checkpoint is downloaded from Hugging Face at runtime; it is not bundled in this project.
+
+BioCLIP 2 (optional, not the default)
+- Model repository: https://huggingface.co/imageomics/bioclip-2
+- The model repository identifies the model license as MIT.
+- The repository contains alternative checkpoint formats; configure and download only one supported format through OpenCLIP. It is not bundled in this project.
+
+OpenCLIP
+- Project: https://github.com/mlfoundations/open_clip
+- Consult the project repository for current licensing and notice requirements.
+
+PyTorch / torchvision
+- Projects: https://github.com/pytorch/pytorch and https://github.com/pytorch/vision
+- Consult the exact installed distribution's license and notices when redistributing binaries.
+- Pretrained MobileNetV3-Small ImageNet weights are obtained through torchvision at runtime.
+
+Dataset caveat
+- The app's bundled 56 plant profiles are a care-information library, not a labelled evaluation dataset. No accuracy metric is asserted from these records.
+- If public reference photos are fetched at runtime, their original source-specific licences and attribution requirements remain applicable. Do not rehost or redistribute those images without checking each source's terms.
