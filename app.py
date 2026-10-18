@@ -1660,19 +1660,23 @@ elif page=="Identify a Plant":
                         else:
                             ai_rows, model_used, model_error = optional_vision_rank(image, st.session_state.get("selected_image_name", ""))
                             if model_used and ai_rows:
-                                rows=ai_rows
+                                rows = ai_rows
                                 if clues:
-                                        adjusted=[]
-                                        for p,s in rows:
-                                            txt=" ".join(str(p.get(k,"")) for k in ["common_name","category","identification","leaf","flower","growth","similar"]).lower()
-                                            bonus=sum(.01 for c in clues if c in txt)
-                                            adjusted.append((p,min(1.0,s+bonus)))
-                                        rows=sorted(adjusted,key=lambda x:x[1],reverse=True)
-                                    label,conf=confidence_label(rows)
-                                    model_note="BioCLIP 2 / BioCLIP local biology vision model"
-                                    health=visual_health_screen(image)
-                                    care=care_assessment(image, rows[0][0], health)
-                                    st.session_state.analysis={"rows":rows,"label":label,"conf":conf,"score":1.0,"model_note":model_note,"model_error":model_error,"health":health,"care":care,"species_unavailable":False}
+                                    adjusted = []
+                                    for p, s in rows:
+                                        txt = " ".join(str(p.get(k, "")) for k in ["common_name", "category", "identification", "leaf", "flower", "growth", "similar"]).lower()
+                                        bonus = sum(.01 for clue in clues if clue in txt)
+                                        adjusted.append((p, min(1.0, s + bonus)))
+                                    rows = sorted(adjusted, key=lambda x: x[1], reverse=True)
+                                label, conf = confidence_label(rows)
+                                model_note = "BioCLIP 2 / BioCLIP local biology vision model"
+                                health = visual_health_screen(image)
+                                care = care_assessment(image, rows[0][0], health)
+                                st.session_state.analysis = {
+                                    "rows": rows, "label": label, "conf": conf, "score": 1.0,
+                                    "model_note": model_note, "model_error": model_error,
+                                    "health": health, "care": care, "species_unavailable": False
+                                }
                             elif not reject_object:
                                 # A model-loading failure is not evidence that a photo contains
                                 # no plant. Do not invent species matches from colour or manual clues.
