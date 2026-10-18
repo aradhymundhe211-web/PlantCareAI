@@ -530,7 +530,7 @@ MODEL_HINTS = {
     "Snake Plant": "snake plant, Dracaena trifasciata, upright sword-shaped leaves with banded markings",
     "Money Plant": "money plant, pothos, Epipremnum aureum, heart-shaped leaves on a trailing vine",
     "Spider Plant": "spider plant, Chlorophytum comosum, long narrow arching leaves and plantlets",
-    "Peace Lily": "peace lily, Spathiphyllum, broad leaves and white spathe flowers",
+    "Peace Lily": "peace lily, Spathiphyllum, clump of glossy dark green lance-shaped leaves arising from the base, distinctive white hood-like spathe surrounding a central spadix",
     "Areca Palm": "areca palm, Dypsis lutescens, multiple thin stems and feather-like palm fronds",
     "Rubber Plant": "rubber plant, Ficus elastica, large thick glossy oval leaves and woody stem",
     "Monstera": "monstera deliciosa, large split or fenestrated leaves",
@@ -546,8 +546,8 @@ MODEL_HINTS = {
     "Chilli": "chili pepper, Capsicum annuum, narrow leaves and elongated or round peppers",
     "Brinjal": "eggplant brinjal, Solanum melongena, broad hairy leaves and purple or white fruit",
     "Okra": "okra, Abelmoschus esculentus, lobed leaves and ridged elongated pods",
-    "Spinach": "spinach, Spinacia oleracea, soft broad green edible leaves",
-    "Cucumber": "cucumber, Cucumis sativus, rough lobed leaves and climbing vine with elongated fruits",
+    "Spinach": "spinach, Spinacia oleracea, low-growing leafy vegetable with soft smooth oval to arrow-shaped leaves in a basal rosette, thin green petioles, no woody trunk",
+    "Cucumber": "cucumber, Cucumis sativus, rough broad palmately lobed leaves on a creeping or climbing vine, coiling tendrils, yellow flowers and elongated green cucumbers",
     "Guava": "guava tree, Psidium guajava, opposite oval leaves with prominent veins and pale bark",
     "Papaya": "papaya, Carica papaya, large deeply lobed leaves on a single trunk",
     "Lemon": "lemon tree, Citrus limon, glossy oval leaves and citrus fruit",
@@ -561,12 +561,12 @@ MODEL_HINTS = {
     "ZZ Plant": "Zamioculcas zamiifolia, upright arching stems with thick glossy dark green oval leaflets",
     "Heartleaf Philodendron": "Philodendron hederaceum, trailing vine with smooth heart-shaped leaves and pointed tips",
     "Fiddle Leaf Fig": "Ficus lyrata, large violin-shaped leathery leaves with prominent pale veins",
-    "Lucky Bamboo": "Dracaena sanderiana, upright green segmented cane stems and narrow lance-shaped leaves",
+    "Lucky Bamboo": "Dracaena sanderiana, smooth upright green cane stems with clearly visible ring-shaped nodes and tufts of narrow lance-shaped leaves; often grown in water, not true bamboo",
     "English Ivy": "Hedera helix, climbing or trailing vine with lobed angular leaves",
     "Boston Fern": "Nephrolepis exaltata, arching feathery fronds with many small leaflets",
     "Dracaena Marginata": "Dracaena marginata, narrow sword-like leaves in tufts atop thin woody canes",
     "Calathea Orbifolia": "Goeppertia orbifolia, broad round green leaves with pale silvery stripes",
-    "Prayer Plant": "Maranta leuconeura, oval leaves with distinctive red veins and patterned green surfaces",
+    "Prayer Plant": "Maranta leuconeura, low spreading herb with oval leaves patterned with dark green patches and vivid red or pink midrib-side veins, leaves fold upward at night",
     "Dieffenbachia": "Dieffenbachia seguine, broad oval leaves with cream or pale green variegated centers",
     "Aglaonema": "Aglaonema commutatum, broad oval foliage often patterned silver, green or pink",
     "Syngonium": "Syngonium podophyllum, arrowhead-shaped juvenile leaves on a climbing or trailing vine",
@@ -630,6 +630,32 @@ def bioclip_text_features():
                 "close-up of spearmint foliage, wrinkled veined leaves and creeping or spreading herb growth, not holy basil",
                 "Mentha spicata botanical field photograph with narrow terminal flower spikes",
                 "mint herb growing in a garden, paired serrated leaves on a spreading stem",
+            ])
+        elif common == "Peace Lily":
+            prompts.extend([
+                "Spathiphyllum peace lily with white hood-shaped spathe and central spadix above a basal clump of glossy green leaves",
+                "close-up of peace lily foliage, broad glossy lance-shaped leaves with prominent midrib, white spathe flower if present",
+                "peace lily houseplant in a pot, not a calla lily, not a white flower bouquet",
+            ])
+        elif common == "Lucky Bamboo":
+            prompts.extend([
+                "Dracaena sanderiana lucky bamboo, green cane stalks with visible horizontal ring nodes and narrow leaves emerging from nodes",
+                "lucky bamboo houseplant with segmented canes arranged in spirals or bundles, often rooted in water, not Bambusa bamboo",
+            ])
+        elif common == "Spinach":
+            prompts.extend([
+                "Spinacia oleracea spinach, edible leafy vegetable in a low basal rosette, smooth tender oval or arrow-shaped leaves",
+                "close-up of spinach leaves and petioles, soft smooth green foliage, no woody trunk and no deeply lobed papaya leaves",
+            ])
+        elif common == "Cucumber":
+            prompts.extend([
+                "Cucumis sativus cucumber vine with rough palmately lobed leaves, coiling tendrils, yellow flowers and elongated green cucumber fruits",
+                "close-up of cucumber plant leaves with five angular lobes and rough texture, climbing cucurbit vine, not okra",
+            ])
+        elif common == "Prayer Plant":
+            prompts.extend([
+                "Maranta leuconeura prayer plant with oval patterned leaves and red veins radiating from the midrib",
+                "close-up of prayer plant foliage with dark green patches, lighter green background and red-pink veins, not Calathea orbifolia",
             ])
         # Include structured profile traits too, but cap their length to avoid generic filler
         # dominating the text embedding. Keep species-specific MODEL_HINTS as the anchor.
