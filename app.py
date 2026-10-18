@@ -1603,7 +1603,7 @@ elif page=="Identify a Plant":
 
             if analyze:
                 sharp,bright,mindim=image_quality(image)
-                if mindim<140 or bright<10 or bright>252 or sharp<4:
+                if mindim<100 or bright<5 or sharp<1:
                     st.session_state.analysis=None
                     st.markdown('<div class="pc-warning"><b>🟡 Photo quality is too low.</b><br>Use daylight and move closer so leaves, flowers or the whole plant are clearly visible.</div>',unsafe_allow_html=True)
                 else:
