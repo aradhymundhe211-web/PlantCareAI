@@ -23,17 +23,19 @@ Changes made in this audit
 - Moved the BioCLIP plant/object check to one pre-ranking pass. Ambiguous BioCLIP evidence now proceeds to species ranking; decisive object/document evidence can still be rejected.
 - Removed duplicate Tulsi and Mint keys from MODEL_HINTS.
 - Replaced boilerplate identification and leaf descriptions with species-specific visual clues derived from each model hint. These descriptions have not been independently reviewed by a botanist.
+- Expanded diagnostic prompt coverage for ZZ Plant, Aglaonema, Mango and Prayer Plant, based on the first original-BioCLIP benchmark's observed confusions.
 - Added benchmark_56.py, which collects research-grade iNaturalist photos by exact scientific taxon, runs the same BioCLIP prompt/prototype ranking approach, and writes per-image predictions plus top-1/top-3 metrics to CSV.
 - Added regression tests and a GitHub Actions workflow for syntax, library integrity, model-hint coverage, prompt coverage, and screening policy.
 - Corrected the About page so it no longer claims optional Pl@ntNet support that is not present in this build.
 
 Automated validation
 - GitHub Actions successfully compiled app.py, plantcare_core.py, and benchmark_56.py.
-- The regression suite passed 25 tests on commit a40f1211fd0062e1ab1a98deacf4c9cacc74d951. Later changes trigger another CI run; check the latest run before treating the current main branch as validated.
-- These are code/data and policy tests only. They do not measure species-identification accuracy.
+- GitHub Actions passed syntax compilation and all 26 regression tests on commit 91adb1395f777829b0352e9ca63afe766e01451f. The later About-page wording update is awaiting its own CI result.
+- These are code/data and policy tests only. They do not prove live Streamlit behavior.
 
 Not yet verified
-- The real-photo 56-species benchmark has not been run; no top-1/top-3 accuracy figure is available.
+- A preliminary original-BioCLIP benchmark evaluated 49 photos covering 49 of 56 classes: 89.8% top-1 and 95.9% top-3. It used only one photo per available class, so these figures are noisy and do not represent expected performance across real-world photos. Seven classes had no downloadable photo: Snake Plant, Areca Palm, Dracaena Marginata, Dwarf Schefflera, Hibiscus, Curry Leaf and Lemon.
+- A second benchmark is running with improved diagnostic prompts; its final metrics must be reviewed before judging whether the prompt changes helped.
 - The actual live Streamlit site has not been tested end-to-end across all seven pages and interactive controls.
 - The exact Mango false-rejection photo and the Fortuner Legender negative photo have not been re-tested on the live deployment after these changes.
 - Car/object false-accept and plant false-reject rates have not been measured on a held-out labelled test set.
@@ -46,4 +48,4 @@ How to run the real-photo benchmark locally
 4. Separately test the live website with plant photos and non-plants. The benchmark evaluates the species ranker only; it does not certify the app's non-plant rejection or browser UI.
 
 Accuracy claims
-- Do not claim 100% accuracy or that all 56 species have passed image tests until the benchmark and live negative/positive test set have actually been run and reviewed.
+- Do not claim 100% accuracy. The current measured result is preliminary, covers 49 classes with one photo each, and has known errors. Accuracy across all 56 species and non-plant rejection remain unverified.
