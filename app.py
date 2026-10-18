@@ -868,7 +868,7 @@ def _analysis_views(img: Image.Image) -> List[Image.Image]:
     """Build full-frame, vegetation-focused, and context crops in that order."""
     im=ImageOps.exif_transpose(img).convert("RGB")
     # Standardize orientation/size before either camera or gallery reaches the model.
-    im.thumbnail((1600,1600),Image.Resampling.LANCZOS)
+    im.thumbnail((1024,1024),Image.Resampling.LANCZOS)
     views=[im]
     w,h=im.size
     # Put the plant-focused crop second: the fast non-plant gate examines the
@@ -882,7 +882,7 @@ def _analysis_views(img: Image.Image) -> List[Image.Image]:
         views.append(im.crop((left,top,left+side,top+side)))
     if h>220:
         views.append(im.crop((0,0,w,int(h*.82))))
-    return views[:3]
+    return views[:2]
 
 def bioclip_rank(img: Image.Image, filename_hint: str = ""):
     """Rank the 56 supported plants with BioCLIP across several image views.
