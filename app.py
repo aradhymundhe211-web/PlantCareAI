@@ -595,11 +595,17 @@ def bioclip_text_features():
         common = str(p.get("common_name", "")).strip()
         scientific = str(p.get("scientific_name", "")).strip()
         hint = str(MODEL_HINTS.get(common, "")).strip()
+        # Use complementary botanical views rather than repeating only a whole-plant label.
+        # This helps when the uploaded photo shows a leaf, flower, stem, or partial plant.
         prompts = [
             f"a real photograph of the whole living {common} plant, {scientific}",
             f"a botanical photograph showing the identifying leaves of {common}, {scientific}",
             f"a close-up photograph of the foliage and leaf arrangement of {common}, {scientific}",
             f"a field photograph of {scientific} growing naturally",
+            f"a plant identification guide photograph of {common} ({scientific}); {hint}",
+            f"a close-up botanical photograph of {common} leaves and stems; diagnostic traits: {hint}",
+            f"a clear photograph of the natural growth habit of {common}, {scientific}; {hint}",
+            f"a real garden photograph of {common} foliage, stems, and leaf arrangement; {hint}",
         ]
         if hint:
             prompts.extend([
@@ -625,6 +631,17 @@ def bioclip_text_features():
                 "Mentha spicata botanical field photograph with narrow terminal flower spikes",
                 "mint herb growing in a garden, paired serrated leaves on a spreading stem",
             ])
+        # Include structured profile traits too, but cap their length to avoid generic filler
+        # dominating the text embedding. Keep species-specific MODEL_HINTS as the anchor.
+        profile_traits = " ".join(
+            str(p.get(key, "")).strip()
+            for key in ("leaf", "flower", "growth")
+            if str(p.get(key, "")).strip()
+        )
+        if profile_traits:
+            prompts.append(
+                f"botanical field guide image of {common} ({scientific}); {profile_traits[:320]}"
+            )
         prompt_rows.append(list(dict.fromkeys(prompts)))
 
     class_prompt_features = []
@@ -863,9 +880,12 @@ def bioclip_rank(img: Image.Image, filename_hint: str = ""):
             for prompts in prompt_features:
                 prompt_scores.append((100.0 * feat @ prompts.T).max(dim=1).values.squeeze(0))
             prompt_scores = torch.stack(prompt_scores)
-            per_view.append(0.70 * proto_scores + 0.30 * prompt_scores)
+            # Keep a strong class prototype but give diagnostic prompts more influence.
+            # Max-prompt scoring is useful for images showing only one distinctive plant part.
+            per_view.append(0.58 * proto_scores + 0.42 * prompt_scores)
         stacked = torch.stack(per_view)
-        logits = 0.75 * stacked.mean(dim=0) + 0.25 * stacked.max(dim=0).values
+        # Average protects against a misleading crop; the best view preserves leaf/flower detail.
+        logits = 0.62 * stacked.mean(dim=0) + 0.38 * stacked.max(dim=0).values
         probs = torch.softmax(logits, dim=0).cpu().numpy()
     order = np.argsort(-probs)[:8]
     rows = [(PLANTS[int(i)], float(probs[int(i)])) for i in order]
