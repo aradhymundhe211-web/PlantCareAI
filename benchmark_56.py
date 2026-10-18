@@ -17,6 +17,7 @@ import ast
 import csv
 import io
 import json
+import hashlib
 import re
 import time
 from pathlib import Path
@@ -63,7 +64,7 @@ def medium_url(url):
 
 def image_bytes(url):
     CACHE.mkdir(parents=True, exist_ok=True)
-    filename = CACHE / (str(abs(hash(url))) + ".jpg")
+    filename = CACHE / (hashlib.sha256(url.encode("utf-8")).hexdigest()[:24] + ".jpg")
     if filename.exists():
         raw = filename.read_bytes()
     else:
@@ -192,10 +193,12 @@ def prompts_for(plant, hint):
     return list(dict.fromkeys(prompts))
 
 
-def load_model():
+def load_model(requested_device="auto"):
     import open_clip
     import torch
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if requested_device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA was requested but is not available in this Python environment.")
+    device = ("cuda" if torch.cuda.is_available() else "cpu") if requested_device == "auto" else requested_device
     errors = []
     for model_id in ("hf-hub:imageomics/bioclip-2", "hf-hub:imageomics/bioclip"):
         try:
@@ -211,6 +214,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--per-class", type=int, default=2, help="Independent real photos per species (default: 2)")
     parser.add_argument("--output", default="benchmark_results.csv", help="CSV output path")
+    parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto", help="Inference device; choose cpu if GPU memory is limited")
     args = parser.parse_args()
     if args.per_class < 1:
         parser.error("--per-class must be at least 1")
@@ -236,7 +240,7 @@ def main():
     print(f"Downloaded {len(dataset)} images. Loading BioCLIP (first run downloads model weights)…")
 
     import torch
-    device, model, preprocess, tokenizer, model_id = load_model()
+    device, model, preprocess, tokenizer, model_id = load_model(args.device)
     print(f"Model: {model_id}; device: {device}. Encoding prompts…")
     prompt_rows = [prompts_for(p, hints[p["common_name"]]) for p in plants]
     prompt_features, prototypes = [], []
