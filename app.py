@@ -747,7 +747,9 @@ def bioclip_gate(img: Image.Image):
     import torch
     plant_scores=[]; object_scores=[]
     with torch.no_grad():
-        for view in _analysis_views(img):
+        # This is a safety gate, not the species ranker; two views are sufficient
+        # here because the independent general-object gate has already run.
+        for view in _analysis_views(img)[:2]:
             x=preprocess(view).unsqueeze(0).to(device)
             f=model.encode_image(x); f=f/f.norm(dim=-1,keepdim=True)
             plant_scores.append(float((100.0*f@plant_text.T).squeeze().cpu()))
@@ -840,7 +842,10 @@ def _analysis_views(img: Image.Image) -> List[Image.Image]:
         side2=int(min(fw,fh)*.90)
         if side2>=160:
             views.append(focus.crop(((fw-side2)//2,(fh-side2)//2,(fw+side2)//2,(fh+side2)//2)))
-    return views[:5]
+    # Three complementary views are enough for a useful ensemble: the full frame,
+    # a centered crop, and (when available) a vegetation-focused crop. The older
+    # five-view path multiplied inference time across three separate BioCLIP checks.
+    return views[:3]
 
 
 def bioclip_rank(img: Image.Image, filename_hint: str = ""):
@@ -896,7 +901,9 @@ def general_object_screen(img_bytes: bytes):
         import torch
         model, preprocess, labels = _general_object_model()
         im=Image.open(io.BytesIO(img_bytes)).convert("RGB")
-        views=_analysis_views(im)[:4]
+        # Two views keep the independent object gate useful without making every
+        # analysis wait on four serial ImageNet inferences.
+        views=_analysis_views(im)[:2]
         votes=[]
         with torch.no_grad():
             for view in views:
@@ -1622,30 +1629,32 @@ elif page=="Identify a Plant":
                                 reject_object = True
                                 object_reason = gate_reason or "Plant not detected with enough confidence"
                         except Exception as gate_exc:
-                            reject_object = True
-                            object_reason = f"Plant detection could not be verified ({type(gate_exc).__name__}). Please try again with a clearer photo."
+                            # A screening-stage exception is not proof that an image
+                            # contains no plant. Continue to the independent species
+                            # and BioCLIP plant/object checks; surface errors only if
+                            # those checks cannot produce a usable result.
+                            general_meta = {"gate_unavailable": type(gate_exc).__name__}
+                            reject_object = False
                         if reject_object:
                             st.session_state.analysis = {"nonplant": True, "reason": object_reason, "score": 0.0}
                         else:
                             ai_rows, model_used, model_error = optional_vision_rank(image, st.session_state.get("selected_image_name", ""))
                             if not reject_object and model_used and ai_rows:
                                 rows=ai_rows
-                                # Secondary BioCLIP/context checks catch text-heavy images
-                                # and cases where the general model is uncertain.
-                                if not reject_object:
-                                    try:
-                                        _, _, obj_plant_score, obj_margin, obj_meta = _strong_object_screen(image)
-                                        if obj_meta.get("object_score",0.0) >= 32.0 and obj_margin <= -6.0:
-                                            reject_object=True
-                                            object_reason="The photo is much more consistent with a non-plant object than with plant imagery."
-                                    except Exception:
-                                        pass
+                                # One BioCLIP plant-vs-object pass replaces two repeated
+                                # multi-view screens. The independent general-object gate
+                                # already ran before species ranking. Reject only decisive
+                                # non-plant evidence; uncertain cases must not be auto-rejected.
                                 try:
-                                    ctx_plant,ctx_text,ctx_margin,doc_score=bioclip_context_screen(image)
-                                    if (ctx_text>=31.0 and ctx_margin<=-2.0) or (doc_score>=.72 and ctx_margin<3.0):
-                                        reject_object=True
-                                        object_reason="The image appears to contain mostly text or document content, not a plant."
+                                    _, _, plant_object_margin, object_meta = bioclip_gate(image)
+                                    object_score = float(object_meta.get("object_score", 0.0))
+                                    if object_score >= 24.0 and plant_object_margin <= -1.0:
+                                        reject_object = True
+                                        object_reason = "The image is much more consistent with a non-plant object than with a living plant."
                                 except Exception:
+                                    # A failed optional safety model is not proof of a
+                                    # non-plant. Keep the species result subject to its
+                                    # normal uncertainty label.
                                     pass
 
                                 if reject_object:
