@@ -66,6 +66,21 @@ def test_identification_code_has_no_local_colour_species_fallback():
     assert "species_unavailable" in source
 
 
+def test_confusable_species_have_diagnostic_prompt_coverage():
+    records = {p["common_name"]: p for p in load_records()}
+    hints = load_hints()
+    required_terms = {
+        "ZZ Plant": ("Zamioculcas zamiifolia", "not bamboo canes"),
+        "Aglaonema": ("Chinese evergreen", "Dieffenbachia"),
+        "Mango": ("Mangifera indica", "not pinnate neem leaflets"),
+        "Prayer Plant": ("herringbone vein pattern", "red-pink veins"),
+    }
+    for name, terms in required_terms.items():
+        prompts = " ".join(prompts_for(records[name], hints[name])).casefold()
+        for term in terms:
+            assert term.casefold() in prompts, (name, term)
+
+
 def test_source_compiles_without_importing_streamlit_or_loading_model():
     compile((ROOT / "app.py").read_text(encoding="utf-8"), "app.py", "exec")
     compile((ROOT / "plantcare_core.py").read_text(encoding="utf-8"), "plantcare_core.py", "exec")
