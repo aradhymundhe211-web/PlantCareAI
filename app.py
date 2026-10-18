@@ -16,7 +16,7 @@ APP_DIR = Path(__file__).resolve().parent
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
-from plantcare_core import assess_plant_health, answer_copilot_question, validate_plant_records
+from plantcare_core import assess_plant_health, answer_copilot_question, validate_plant_records, decide_vision_gate
 
 import numpy as np
 import requests
@@ -490,34 +490,72 @@ def render_due_reminder_alerts():
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-# Optional real vision model: BioCLIP.
-# BioCLIP is a biology-focused zero-shot image classifier.  It is loaded lazily
-# so the app can still start when the model cannot be downloaded.  The offline
-# matcher remains as a fallback, but BioCLIP is preferred for species matching.
+# Local vision model: BioCLIP.
+# Original BioCLIP is the resource-conscious default for free CPU hosting. The
+# optional BioCLIP 2 checkpoint can be selected explicitly on a stronger host.
+# Models load lazily, and failure never becomes a fabricated species prediction.
 # -----------------------------------------------------------------------------
+DEFAULT_BIOCLIP_MODEL_ID = "hf-hub:imageomics/bioclip"
+BIOCLIP2_MODEL_ID = "hf-hub:imageomics/bioclip-2"
+
+
+def selected_bioclip_model_id() -> str:
+    """Choose the configured model without silently loading a much larger fallback.
+
+    Original BioCLIP is the safe default for limited free hosting. BioCLIP 2 can
+    be selected with PLANTCARE_MODEL_ID=hf-hub:imageomics/bioclip-2 only after
+    a deployment's RAM/startup budget has been tested.
+    """
+    requested = os.environ.get("PLANTCARE_MODEL_ID")
+    if not requested:
+        try:
+            requested = st.secrets.get("PLANTCARE_MODEL_ID", DEFAULT_BIOCLIP_MODEL_ID)
+        except Exception:
+            requested = DEFAULT_BIOCLIP_MODEL_ID
+    requested = str(requested).strip()
+    if requested not in {DEFAULT_BIOCLIP_MODEL_ID, BIOCLIP2_MODEL_ID}:
+        return DEFAULT_BIOCLIP_MODEL_ID
+    return requested
+
+
+def _gate_float_setting(name: str, default: float) -> float:
+    """Read optional screening thresholds from environment or Streamlit secrets."""
+    value = os.environ.get(name)
+    if value is None:
+        try:
+            value = st.secrets.get(name, default)
+        except Exception:
+            value = default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
 @st.cache_resource(show_spinner=False)
 def load_bioclip():
-    """Load one shared BioCLIP model for the whole Streamlit process.
+    """Load one shared OpenCLIP-backed BioCLIP model for this server process.
 
-    Community Cloud has limited memory, so every identification component must
-    reuse the same model instead of constructing separate model copies.
+    A single explicit model choice avoids downloading BioCLIP 2 (about 1.71 GB
+    for its main checkpoint) and then unexpectedly loading original BioCLIP as
+    a fallback on a memory-constrained free host. Loading failures are surfaced
+    to the user rather than being converted to invented species predictions.
     """
     import torch
     import open_clip
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    # BioCLIP 2 is a newer biology foundation model and performs better on
-    # published species-identification benchmarks than the original BioCLIP.
-    # Its checkpoint is much larger, so keep the original as a deployment fallback.
-    errors = []
-    for model_id in ("hf-hub:imageomics/bioclip-2", "hf-hub:imageomics/bioclip"):
-        try:
-            model, _, preprocess = open_clip.create_model_and_transforms(model_id)
-            tokenizer = open_clip.get_tokenizer(model_id)
-            model = model.to(device).eval()
-            return device, model, preprocess, tokenizer
-        except Exception as exc:
-            errors.append(f"{model_id}: {type(exc).__name__}")
-    raise RuntimeError("Could not load BioCLIP 2 or BioCLIP (" + "; ".join(errors) + ")")
+    model_id = selected_bioclip_model_id()
+    try:
+        model, _, preprocess = open_clip.create_model_and_transforms(model_id)
+        tokenizer = open_clip.get_tokenizer(model_id)
+        model = model.to(device).eval()
+        return device, model, preprocess, tokenizer
+    except Exception as exc:
+        raise RuntimeError(
+            f"Could not load configured vision model {model_id} ({type(exc).__name__}). "
+            "Check network access, dependency installation, disk space and available memory."
+        ) from exc
 
 
 MODEL_HINTS = {
@@ -733,7 +771,7 @@ def bioclip_context_screen(img: Image.Image):
     import torch
     ps=[]; ts=[]
     with torch.no_grad():
-        for view in _analysis_views(img):
+        for view in _screening_views(img):
             x=preprocess(view).unsqueeze(0).to(device); f=model.encode_image(x); f=f/f.norm(dim=-1,keepdim=True)
             ps.append(float((100.0*f@plant_text.T).squeeze().cpu())); ts.append(float((100.0*f@text_text.T).squeeze().cpu()))
     plant_score=float(np.mean(ps)); text_score=float(np.mean(ts))
@@ -747,7 +785,7 @@ def bioclip_gate(img: Image.Image):
     import torch
     plant_scores=[]; object_scores=[]
     with torch.no_grad():
-        for view in _analysis_views(img):
+        for view in _screening_views(img):
             x=preprocess(view).unsqueeze(0).to(device)
             f=model.encode_image(x); f=f/f.norm(dim=-1,keepdim=True)
             plant_scores.append(float((100.0*f@plant_text.T).squeeze().cpu()))
@@ -843,6 +881,22 @@ def _analysis_views(img: Image.Image) -> List[Image.Image]:
     return views[:5]
 
 
+def _screening_views(img: Image.Image) -> List[Image.Image]:
+    """Select at most three complementary views for the plant-presence gate.
+
+    The original frame and vegetation-focused view are important for plants that
+    are small in the frame. Limiting screening to three views reduces first-demo
+    CPU latency; species ranking can still use the complete multi-view set.
+    """
+    views = _analysis_views(img)
+    chosen = [views[0]] if views else []
+    if len(views) > 1:
+        chosen.append(views[1])
+    if len(views) > 2:
+        chosen.append(views[-1])
+    return chosen
+
+
 def bioclip_rank(img: Image.Image, filename_hint: str = ""):
     """Rank the 56 supported plants with BioCLIP across several image views.
 
@@ -909,7 +963,7 @@ def general_object_screen(img_bytes: bytes):
         hard_nonplant=(
             "car","jeep","sports car","minivan","pickup","truck","bus","motorcycle","bicycle","suv","station wagon","convertible","limousine",
             "scooter","vehicle","airliner","aircraft","person","man","woman","boy","girl",
-            "laptop","computer","keyboard","mouse","monitor","screen","television","remote",
+            "laptop","computer","keyboard","mouse","monitor","screen","television","remote","web site","website","desktop computer","computer monitor",
             "cellular telephone","telephone","camera","microphone","refrigerator","washer","vacuum",
             "radio","printer","book","notebook","envelope","building","streetcar","street sign",
             "traffic light","parking meter","fire engine","ambulance","police van","school bus","desktop computer",
@@ -960,54 +1014,79 @@ def optional_vision_rank(img: Image.Image, filename_hint: str = ""):
         return [], False, f"{type(exc).__name__}: {exc}"
 
 
-def _strong_object_screen(img: Image.Image):
-    """Return the raw BioCLIP plant/object evidence for a final rejection check.
-
-    This is intentionally separate from the old conservative gate. A plant
-    identification result should not be discarded merely because a generic
-    plant-vs-object prompt set is uncertain. We only use this helper to reject
-    images when object evidence is decisively stronger.
-    """
-    device, model, plant_text, object_text = bioclip_gate_text_features()
-    preprocess = load_bioclip()[2]
-    import torch
-    plant_scores=[]; object_scores=[]
-    with torch.no_grad():
-        for view in _analysis_views(img):
-            x=preprocess(view).unsqueeze(0).to(device)
-            f=model.encode_image(x); f=f/f.norm(dim=-1,keepdim=True)
-            plant_scores.append(float((100.0*f@plant_text.T).squeeze().cpu()))
-            object_scores.append(float((100.0*f@object_text.T).squeeze().cpu()))
-    ps=float(np.mean(plant_scores)); os=float(np.mean(object_scores)); margin=ps-os
-    return device, model, ps, margin, {"plant_score":ps,"object_score":os}
-
-
 def vision_gate(img: Image.Image):
-    """Reject only strong non-plant/document evidence; avoid false negatives.
+    """Require positive plant evidence before any 56-species ranking.
 
-    This is a screening gate, not the species classifier. A failure to download
-    a model is not evidence that the uploaded image is not a plant.
+    The RGB vegetation heuristic is supporting evidence only. A strong non-plant
+    prediction, screenshot/document evidence, or an inconclusive BioCLIP gate
+    stops the pipeline before species matching. If model validation fails, the
+    app refuses to guess instead of treating a model error as proof of a plant.
     """
     local_is_plant, local_score, local_reason, local_features = plant_gate(img)
     sharp, bright, mindim = image_quality(img)
-    if mindim < 100 or bright < 5 or sharp < 1.0:
-        return False, 0.0, "Photo is too small, dark, or blurred to assess reliably", {"gate": "quality"}
+    quality_ok = not (mindim < 100 or bright < 5 or sharp < 1.0)
+    if not quality_ok:
+        return False, 0.0, "Photo is too small, dark, or blurred to assess reliably", {"gate": "quality", "category": "quality"}
+
+    # The independent ImageNet gate is useful when its weights are available, but
+    # BioCLIP must still provide positive botanical evidence if it is unavailable.
+    general_rejected = False
+    general_reason = ""
+    general_meta = {}
     try:
         raw = io.BytesIO()
-        ImageOps.exif_transpose(img).convert("RGB").save(raw, format="JPEG", quality=90)
-        reject_general, reason, meta = general_object_screen(raw.getvalue())
-        if reject_general:
-            return False, 0.0, reason, {"gate": "general_object", "general": meta}
+        ImageOps.exif_transpose(img).convert("RGB").save(raw, format="JPEG", quality=88)
+        general_rejected, general_reason, general_meta = general_object_screen(raw.getvalue())
     except Exception as exc:
-        meta = {"general_gate_unavailable": type(exc).__name__}
-    doc_score = _document_visual_score(img)
-    if doc_score >= 0.88 and not local_is_plant:
-        return False, 0.0, "The image appears to be a text-heavy document or screenshot", {"gate": "document"}
-    # If visual evidence is ambiguous, let the species matcher decide rather than
-    # rejecting real plants because of unusual colours, pots, lighting or backgrounds.
-    if local_is_plant:
-        return True, local_score, local_reason, {"gate": "local_visual", "features": local_features}
-    return True, local_score, "Plant presence is uncertain; continuing to species matching", {"gate": "defer_to_species_model", "features": local_features}
+        general_meta = {"gate_unavailable": type(exc).__name__}
+    if general_rejected:
+        return False, 0.0, general_reason or "A general-object model recognised a likely non-plant image", {
+            "gate": "general_object", "category": "nonplant", "general": general_meta, "local_features": local_features
+        }
+
+    try:
+        bio_is_plant, bio_plant_score, bio_margin, bio_meta = bioclip_gate(img)
+        context_plant, context_text, context_margin, document_score = bioclip_context_screen(img)
+    except Exception as exc:
+        return False, 0.0, (
+            "Plant presence could not be verified because the vision validation model is unavailable. "
+            "Please retry when the model has loaded or use a clearer plant photo."
+        ), {"gate": "validation_unavailable", "category": "unavailable", "error": f"{type(exc).__name__}: {exc}"}
+
+    decision = decide_vision_gate(
+        quality_ok=quality_ok,
+        general_object_rejected=False,
+        bio_plant_score=float(bio_meta.get("plant_score", bio_plant_score)),
+        bio_object_score=float(bio_meta.get("object_score", bio_plant_score - bio_margin)),
+        context_plant_score=float(context_plant),
+        context_text_score=float(context_text),
+        document_score=float(document_score),
+        minimum_bio_plant_score=_gate_float_setting("PLANTCARE_GATE_MIN_PLANT_SCORE", 18.0),
+        minimum_bio_margin=_gate_float_setting("PLANTCARE_GATE_MIN_MARGIN", 1.5),
+        context_text_threshold=_gate_float_setting("PLANTCARE_GATE_CONTEXT_TEXT_SCORE", 31.0),
+        context_negative_margin=_gate_float_setting("PLANTCARE_GATE_CONTEXT_NEGATIVE_MARGIN", -2.0),
+        document_score_threshold=_gate_float_setting("PLANTCARE_GATE_DOCUMENT_SCORE", 0.72),
+        document_margin_threshold=_gate_float_setting("PLANTCARE_GATE_DOCUMENT_MARGIN", 3.0),
+    )
+    meta = {
+        "gate": "bioclip_presence_and_context",
+        "general": general_meta,
+        "bioclip": bio_meta,
+        "context_plant_score": float(context_plant),
+        "context_text_score": float(context_text),
+        "context_margin": float(context_margin),
+        "document_score": float(document_score),
+        "local_visual_hint": bool(local_is_plant),
+        "local_visual_score": float(local_score),
+    }
+    accepted, reason, category = decision
+    meta["category"] = category
+    if not accepted:
+        return False, float(local_score), reason, meta
+    return True, float(local_score), (
+        "Plant presence supported by the vision validation stage"
+        if local_is_plant else "Plant presence supported by the biological vision model"
+    ), meta
 
 
 # -----------------------------------------------------------------------------
@@ -1218,21 +1297,22 @@ def care_assessment(img: Image.Image, p: dict, health: dict) -> dict:
     }
 
 
-def confidence_label(rows: List[Tuple[dict,float]]) -> Tuple[str,int]:
+def confidence_label(rows: List[Tuple[dict,float]]) -> str:
+    """Describe rank separation without displaying an uncalibrated probability."""
     if not rows:
-        return "Needs confirmation", 0
-    top=float(rows[0][1]); second=float(rows[1][1]) if len(rows)>1 else 0.0
-    margin=max(0.0,top-second)
-    # BioCLIP softmax scores across 56 classes are not calibrated probabilities.
-    # Convert rank separation into a bounded visual-match band instead of using
-    # an impossible absolute probability threshold.
-    if margin >= .055 and top >= .10:
-        return "Strong candidate", min(92,max(75,int(75+margin*220)))
-    if margin >= .025 and top >= .055:
-        return "Likely candidate", min(84,max(60,int(60+margin*240)))
-    if margin >= .012 and top >= .035:
-        return "Possible match", min(72,max(52,int(52+margin*260)))
-    return "Needs confirmation", 50
+        return "Needs confirmation"
+    top = float(rows[0][1])
+    second = float(rows[1][1]) if len(rows) > 1 else 0.0
+    margin = max(0.0, top - second)
+    # These are ordinal descriptions of ranking separation, not calibrated confidence.
+    if margin >= 0.055 and top >= 0.10:
+        return "Strong candidate"
+    if margin >= 0.025 and top >= 0.055:
+        return "Likely candidate"
+    if margin >= 0.012 and top >= 0.035:
+        return "Possible match"
+    return "Needs confirmation"
+
 
 # -----------------------------------------------------------------------------
 # UI helpers
@@ -1589,7 +1669,7 @@ elif page=="Identify a Plant":
                 with c4: growth=st.selectbox("Growth habit",["Not sure","Upright","Trailing/vining","Clumping","Tree/shrub","Rosette"],key="growth_v5")
                 with c5: thorns=st.selectbox("Thorns / spines",["Not sure","Present","Not visible"],key="thorns_v5")
 
-            id_engine_copy = "PlantCare AI uses BioCLIP 2 first, then falls back to the original BioCLIP if the newer model cannot load. It compares multiple botanical descriptions and image views across the 56 supported plants. The filename is never used to choose the plant."
+            id_engine_copy = f"PlantCare AI uses {'BioCLIP 2' if selected_bioclip_model_id() == BIOCLIP2_MODEL_ID else 'BioCLIP'} for zero-shot image/text matching. A separate plant-presence gate must pass before the 56 supported species are ranked. This is a relative match, not a guaranteed diagnosis."
             st.markdown(f'<div class="pc-analyze-box"><div><b>Ready to identify this photo?</b><br><span>{id_engine_copy}</span></div></div>',unsafe_allow_html=True)
             analyze=st.button("🔎  ANALYZE IMAGE",type="primary",width="stretch",key="analyze_v10")
             cclear,_=st.columns([1,4])
@@ -1620,49 +1700,44 @@ elif page=="Identify a Plant":
                             general_meta = gate_meta
                             if not gate_is_plant:
                                 reject_object = True
-                                object_reason = gate_reason or "Plant not detected with enough confidence"
+                                object_reason = gate_reason or "Plant presence could not be verified"
+                                failure_category = str(gate_meta.get("category", "uncertain"))
+                            else:
+                                failure_category = ""
                         except Exception as gate_exc:
                             reject_object = True
                             object_reason = f"Plant detection could not be verified ({type(gate_exc).__name__}). Please try again with a clearer photo."
+                            failure_category = "unavailable"
                         if reject_object:
-                            st.session_state.analysis = {"nonplant": True, "reason": object_reason, "score": 0.0}
+                            if failure_category == "unavailable":
+                                st.session_state.analysis = {
+                                    "rows": [], "label": "Identification unavailable", "conf": 0,
+                                    "model_note": "Plant validation unavailable", "model_error": object_reason,
+                                    "health": None, "care": None, "species_unavailable": True,
+                                }
+                            elif failure_category in {"quality", "uncertain"}:
+                                st.session_state.analysis = {
+                                    "gate_uncertain": True, "reason": object_reason,
+                                    "gate_category": failure_category, "score": 0.0,
+                                }
+                            else:
+                                st.session_state.analysis = {"nonplant": True, "reason": object_reason, "score": 0.0}
                         else:
                             ai_rows, model_used, model_error = optional_vision_rank(image, st.session_state.get("selected_image_name", ""))
                             if not reject_object and model_used and ai_rows:
                                 rows=ai_rows
-                                # Secondary BioCLIP/context checks catch text-heavy images
-                                # and cases where the general model is uncertain.
-                                if not reject_object:
-                                    try:
-                                        _, _, obj_plant_score, obj_margin, obj_meta = _strong_object_screen(image)
-                                        if obj_meta.get("object_score",0.0) >= 32.0 and obj_margin <= -6.0:
-                                            reject_object=True
-                                            object_reason="The photo is much more consistent with a non-plant object than with plant imagery."
-                                    except Exception:
-                                        pass
-                                try:
-                                    ctx_plant,ctx_text,ctx_margin,doc_score=bioclip_context_screen(image)
-                                    if (ctx_text>=31.0 and ctx_margin<=-2.0) or (doc_score>=.72 and ctx_margin<3.0):
-                                        reject_object=True
-                                        object_reason="The image appears to contain mostly text or document content, not a plant."
-                                except Exception:
-                                    pass
-
-                                if reject_object:
-                                    st.session_state.analysis={"nonplant":True,"reason":object_reason,"score":0.0}
-                                else:
-                                    if clues:
-                                        adjusted=[]
-                                        for p,s in rows:
-                                            txt=" ".join(str(p.get(k,"")) for k in ["common_name","category","identification","leaf","flower","growth","similar"]).lower()
-                                            bonus=sum(.01 for c in clues if c in txt)
-                                            adjusted.append((p,min(1.0,s+bonus)))
-                                        rows=sorted(adjusted,key=lambda x:x[1],reverse=True)
-                                    label,conf=confidence_label(rows)
-                                    model_note="BioCLIP 2 / BioCLIP local biology vision model"
-                                    health=visual_health_screen(image)
-                                    care=care_assessment(image, rows[0][0], health)
-                                    st.session_state.analysis={"rows":rows,"label":label,"conf":conf,"score":1.0,"model_note":model_note,"model_error":model_error,"health":health,"care":care,"species_unavailable":False}
+                                if clues:
+                                    adjusted=[]
+                                    for p,s in rows:
+                                        txt=" ".join(str(p.get(k,"")) for k in ["common_name","category","identification","leaf","flower","growth","similar"]).lower()
+                                        bonus=sum(.01 for c in clues if c in txt)
+                                        adjusted.append((p,min(1.0,s+bonus)))
+                                    rows=sorted(adjusted,key=lambda x:x[1],reverse=True)
+                                label=confidence_label(rows)
+                                model_note = "BioCLIP 2 local model" if selected_bioclip_model_id() == BIOCLIP2_MODEL_ID else "Original BioCLIP local model"
+                                health=visual_health_screen(image)
+                                care=care_assessment(image, rows[0][0], health)
+                                st.session_state.analysis={"rows":rows,"label":label,"score":1.0,"model_note":model_note,"model_error":model_error,"health":health,"care":care,"species_unavailable":False}
                             elif not reject_object:
                                 # A model-loading failure is not evidence that a photo contains
                                 # no plant. Do not invent species matches from colour or manual clues.
@@ -1689,7 +1764,9 @@ elif page=="Identify a Plant":
 
     result=st.session_state.analysis
     if result and result.get("nonplant"):
-        st.markdown(f'<div class="pc-error"><b>🚫 NO PLANT DETECTED / PLANT NOT VERIFIED</b><br>{result["reason"]}. Try a clear, well-lit photo of a real plant with leaves, stems or flowers filling most of the frame. Ordinary objects must not be forced into a plant name.</div>',unsafe_allow_html=True)
+        st.markdown(f'<div class="pc-error"><b>🚫 NON-PLANT IMAGE REJECTED</b><br>{result["reason"]}. Upload a clear, well-lit photograph of a real plant with leaves, stems or flowers visible.</div>',unsafe_allow_html=True)
+    elif result and result.get("gate_uncertain"):
+        st.markdown(f'<div class="pc-warning"><b>🟡 PLANT PRESENCE NOT VERIFIED</b><br>{result["reason"]}. No species name was assigned. Try a closer, sharper photograph of the plant against a simpler background.</div>',unsafe_allow_html=True)
     elif result and result.get("species_unavailable"):
         st.markdown('<div class="pc-warning"><b>🌿 Species identification is temporarily unavailable.</b><br>The vision model could not produce a reliable result, so PlantCare AI will not guess a species or claim that a plant was confirmed. Check the deployment logs and retry when the model is available.</div>',unsafe_allow_html=True)
         health=result.get("health")
@@ -1702,7 +1779,7 @@ elif page=="Identify a Plant":
         st.success("🌱 PLANT PHOTO ACCEPTED")
         st.caption(f"Analysis engine: {result.get('model_note','')}")
         if result.get("model_error"):
-            st.warning("The main vision model could not be loaded, so this result is only a local shortlist. Check the internet connection and try Analyze again.")
+            st.warning("The vision model reported a loading issue. Treat this ranking cautiously and retry after checking the deployment logs.")
         st.markdown(f'<div class="pc-result"><div style="font-size:.78rem;font-weight:900;color:#64766b;text-transform:uppercase;letter-spacing:.08em">TOP PLANT MATCH</div><div class="pc-result-name">🌿 {top["common_name"]}</div><div class="pc-scientific"><b>Common name:</b> {top["common_name"]} &nbsp; · &nbsp; <i>{top["scientific_name"]}</i> · {top["family"]}</div><div class="pc-badge">{result["label"]} · relative model ranking</div></div>',unsafe_allow_html=True)
         if result["label"] in ["Possible match","Needs confirmation"] or "confirm visually" in result["label"]:
             st.markdown('<div class="pc-warning"><b>Confirm before relying on the name:</b> visually similar plants can look alike. Use the alternatives and the reference photo below.</div>',unsafe_allow_html=True)
@@ -1731,7 +1808,7 @@ elif page=="Identify a Plant":
             with col1:
                 plant_photo(p, photo_map=alt_map)
             with col2:
-                st.markdown(f'<div class="pc-card"><h3>{p["common_name"]}</h3><p><i>{p["scientific_name"]}</i><br>Visual score: {s:.3f}</p></div>',unsafe_allow_html=True)
+                st.markdown(f'<div class="pc-card"><h3>{p["common_name"]}</h3><p><i>{p["scientific_name"]}</i><br>Relative model score: {s:.3f} (not a probability)</p></div>',unsafe_allow_html=True)
         health=result.get("health")
         if health:
             st.markdown("### 🩺 Visual health screening")
@@ -1969,8 +2046,9 @@ elif page=="Plant Health Copilot":
             st.markdown(chat_message["content"])
     user_question = st.chat_input("Ask about watering, light, soil, pests, or a supported plant…", key="copilot_chat_input")
     if user_question:
+        prior_history = list(st.session_state.copilot_chat_messages)
         st.session_state.copilot_chat_messages.append({"role": "user", "content": user_question})
-        answer = answer_copilot_question(user_question, PLANTS)
+        answer = answer_copilot_question(user_question, PLANTS, conversation_history=prior_history)
         st.session_state.copilot_chat_messages.append({"role": "assistant", "content": answer})
         st.rerun()
     chat_col1, chat_col2 = st.columns([1, 5])
@@ -2109,7 +2187,7 @@ elif page=="About":
     with about_right:
         st.markdown('<div class="pc-card"><h3>Project Information</h3><p><b>Project Name:</b> PlantCare AI<br><b>Developed by:</b> Aradhy Mundhe<br><b>Technologies:</b> Python, Streamlit, PyTorch, OpenCLIP, BioCLIP<br><b>Total Plant Species:</b> 56<br><b>Deployment:</b> Streamlit Community Cloud<br><b>Live Website:</b> <a href="https://plantcareai-kznq8jblfdsk3u5jvsw9rt.streamlit.app" target="_blank">Open PlantCare AI</a></p></div>',unsafe_allow_html=True)
         st.markdown('<div class="pc-card" style="display:flex;align-items:center;gap:22px;flex-wrap:wrap"><img class="pc-about-qr" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZoAAAGaAQAAAAAefbjOAAAC/klEQVR4nO2cQW7jMAxFP0cCsrSBHKBHka/WI+UG9lFygAHkZQEZfxYUHbuzSlvYqU0vhLj2QySEIPlJqUI8fQ1/nmcAhxxyyCGHHHLomJDUK0K6UUSkBUTaSUTaSYDRXuh2mZ5D20OJJJkBoCn6J/J+IXmPABBIklxD203Poe2hsToA9mMEmScx2wiUDoCIxP2m59BmUPx0L0AowNhC0PyNBABi3Gt6Du0OsW8+BBomMiAd6vDj3+TQa0MNyR4A0j0CQwsd+N7WF0iW/abn0GZQjRqDAAACJN1CkZSvkHS/UFK+AsAk+0zPoc0htYhlKbspmjhweLNP6xdefk0OfQeCqsqUAfaoA1IOagPsGxIpB7JvSlWp/YuvyaHvQNVHDG0oSJwiqtYAkG4tBM0UiXESYnT1eQZIfQSZAfYI1ByT6hSonkH9BtxHnAKqUUO1hg2Y1SeSDTV+uEUcHao+oqYLs8sgLXHIK6OhW8TRIfu5AajMmH/9lTEUrUe4RRwfwsIf6K3JDL1SDpZluI84BbRSn5oplKo+VXPCZClzcIs4AbSIC5jzSVUY2hxHoIqQ5BZxCmhOJau0RGJZOwVzGXCtcQpIq06CJhODhPLpsQCBwDgJ0i0Wbj09h/aCkm6RqY1wrUIMb6U+GNpAe7rL9BzaQX0Gq0vZLXtY4ZIWSTxqnArSnGEQ21WX+CHSYRIRucxGs9v0HNoGmrvhkyDdWiDlq26tEzSZok/HKyRx8qhxAmhRoap9DcBUR8YsMwoeFU2PGoeGrEJlIlOzB64kqL5YtalbxMGhZWvr0cNYFLXnQoV3us4EPc50YVYdSCyQbowAxlj74vtMz6E9ogapEaK2tmzoAfMR9sl9xKGhRadr2dqyRHPxona/3CKODv13pisREOBiTuF2LQCmuDzY9eJrcujHodVZnkk0j8Bjx+VvXJNDT0JWiuC7iHY4RN6Kqk/psD7v90vW5NBXoNWuOlMY1RUgzHuxl10PzyMODYn/ZzKHHHLIIYcccuiL0D8b8JWmdpC6LAAAAABJRU5ErkJggg==" alt="QR code to open PlantCare AI"><div><h3>📱 Scan to open PlantCare AI</h3><p>Open your phone camera and point it at the QR code.</p><p><a href="https://plantcareai-kznq8jblfdsk3u5jvsw9rt.streamlit.app" target="_blank">plantcareai-kznq8jblfdsk3u5jvsw9rt.streamlit.app</a></p></div></div>',unsafe_allow_html=True)
-    st.markdown('<div class="pc-card"><h3>PlantCare AI — Made by Aradhy Mundhe</h3><p>This project was created by <b>Aradhy Mundhe</b> as a student project for plant identification, plant education and practical plant care.</p></div><div class="pc-card"><h3>What changed in this updated version?</h3><p>• Added a two-stage safety gate: general-object screening before plant species matching, followed by biological vision checks.<br>• Kept the offline-safe local visual screening so a model-loading problem does not crash the app.<br>• Reworked the sidebar into clear, large navigation buttons.<br>• Converted the interface to a consistent white-and-green theme.<br>• Added multi-view camera/gallery analysis, visual health screening, care requirements and clearer uncertainty messages.<br>• Optional Pl@ntNet API support; local BioCLIP fallback remains available without its key.</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-card"><h3>PlantCare AI — Made by Aradhy Mundhe</h3><p>This project was created by <b>Aradhy Mundhe</b> as a student project for plant identification, plant education and practical plant care.</p></div><div class="pc-card"><h3>What changed in this updated version?</h3><p>• Added a two-stage safety gate: general-object screening before plant species matching, followed by biological vision checks.<br>• Kept the offline-safe local visual screening so a model-loading problem does not crash the app.<br>• Reworked the sidebar into clear, large navigation buttons.<br>• Converted the interface to a consistent white-and-green theme.<br>• Added multi-view camera/gallery analysis, visual health screening, care requirements and clearer uncertainty messages.<br>• No paid inference API is required; model availability and real-world accuracy are not guaranteed.</p></div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-title">Sharing</div>',unsafe_allow_html=True)
     st.markdown('<div class="pc-info"><b>For your teacher:</b> the easiest experience is a public hosted URL. A <code>localhost</code> address only works on the computer running PlantCare AI. The included launcher is for local use; online sharing requires deployment to a web host.</div>',unsafe_allow_html=True)
 
