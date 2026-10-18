@@ -15,5 +15,5 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install pytest
-      - run: python -m py_compile app.py plantcare_core.py
+      - run: python -m py_compile app.py plantcare_core.py benchmark_56.py
       - run: pytest -q
