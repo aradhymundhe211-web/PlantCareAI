@@ -75,7 +75,7 @@ def decide_vision_gate(
     # probabilities, and flowering or unusual foliage can score ambiguously.
     # Reject documents only with very strong document evidence and no clear
     # plant advantage; reject objects only when object evidence is decisive.
-    if document >= 0.92 and margin < 1.5:
+    if document >= 0.84 and margin < 4.0:
         return False, "The image appears to be a text-heavy document or screenshot", "nonplant"
     if object_score >= 27.0 and margin <= -3.0:
         return False, "The image is much more consistent with a non-plant object than a living plant", "nonplant"
