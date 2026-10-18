@@ -212,3 +212,20 @@ def test_high_risk_species_profiles_have_specific_care_and_identification_guidan
         combined = " ".join(str(p.get(k, "")) for k in ("identification", "leaf", "growth", "light", "water", "toxicity", "pet_safety", "similar")).casefold()
         for phrase in phrases:
             assert phrase.casefold() in combined, (name, phrase)
+
+def test_diagnostic_prompt_branches_cover_previously_misidentified_species():
+    source = Path(__file__).resolve().parents[1].joinpath("app.py").read_text(encoding="utf-8")
+    expected = {
+        "Snake Plant": ("rigid thick upright sword-shaped leaves", "transverse banding"),
+        "Dracaena Marginata": ("narrow linear pointed leaves", "red or burgundy margins"),
+        "Prayer Plant": ("red veins radiating from the midrib", "not Calathea orbifolia"),
+        "Aglaonema": ("silver or pale green patterned centres", "distinguish from Dieffenbachia"),
+        "Curry Leaf": ("many small separate glossy pointed leaflets", "central rachis"),
+        "Lemon": ("simple glossy oval citrus leaves", "not compound pinnate leaves"),
+        "Mango": ("simple entire-edged elongated leaves", "not pinnate neem leaflets"),
+        "Spinach": ("low basal rosette", "no deeply lobed papaya leaves"),
+    }
+    for species, phrases in expected.items():
+        assert f'common == "{species}"' in source or f'"{species}":' in source
+        for phrase in phrases:
+            assert phrase.casefold() in source.casefold(), (species, phrase)
