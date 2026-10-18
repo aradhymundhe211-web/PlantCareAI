@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
-from plantcare_core import assess_plant_health, validate_plant_records
+from plantcare_core import answer_copilot_question, assess_plant_health, validate_plant_records
 
 
 ROOT = Path(__file__).resolve().parent
@@ -77,6 +77,17 @@ class PlantHealthCopilotTests(unittest.TestCase):
             self.plants["Mint"], [], notes="x" * 2000
         )
         self.assertLessEqual(len(result["notes"]), 500)
+
+    def test_copilot_answers_from_named_plant_profile(self):
+        answer = answer_copilot_question("How much light does Mango need?", self.plants)
+        self.assertIn("Mango", answer)
+        self.assertIn("Light", answer)
+        self.assertIn(self.plants["Mango"]["light"], answer)
+
+    def test_copilot_does_not_guess_unnamed_plant(self):
+        answer = answer_copilot_question("What is wrong with my plant?", self.plants)
+        self.assertIn("could not identify a specific plant", answer)
+        self.assertIn("do not use a paid AI API", answer)
 
 
 if __name__ == "__main__":
