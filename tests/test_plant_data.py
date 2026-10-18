@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from plantcare_core import REQUIRED_PLANT_FIELDS, validate_plant_records
+from benchmark_56 import load_hints, prompts_for
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -64,3 +65,13 @@ def test_identification_code_has_no_local_colour_species_fallback():
 def test_source_compiles_without_importing_streamlit_or_loading_model():
     compile((ROOT / "app.py").read_text(encoding="utf-8"), "app.py", "exec")
     compile((ROOT / "plantcare_core.py").read_text(encoding="utf-8"), "plantcare_core.py", "exec")
+
+
+def test_benchmark_prompt_builder_covers_all_56_species():
+    records = load_records()
+    hints = load_hints()
+    assert set(hints) == {p["common_name"] for p in records}
+    for plant in records:
+        prompts = prompts_for(plant, hints[plant["common_name"]])
+        assert len(prompts) >= 6
+        assert all(isinstance(prompt, str) and prompt.strip() for prompt in prompts)
