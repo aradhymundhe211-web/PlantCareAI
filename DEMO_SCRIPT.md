@@ -1,52 +1,81 @@
-# PlantCare AI — Live Demonstration Script
+# PlantCare AI — Easy Live Demo Script
 
-## Before the presentation (5–10 minutes)
-- Open the deployed website and wait for it to finish loading.
-- Test one clear, well-lit photo of a supported plant (a whole plant with visible leaves is preferable).
-- Test one non-plant photo, such as a car, to demonstrate the rejection safeguard.
-- Confirm each page opens: Identify Plant, Visual Health Monitoring, plant library/profile, My Plants/reminders, Plant Health Copilot, and About.
-- Keep backup plant photos locally available. If the live model fails or gives an uncertain result, explain it honestly and move to another prepared photo. Do not claim an incorrect result is correct.
-- Use photos you have permission to show, and avoid relying on internet access for the images during the demo.
+**You do not need to memorise this. Keep this page open and read one part at a time.**  
+Anything in **[square brackets]** is an action for you, not something to say aloud.
 
-## Spoken script (about 4 minutes)
+## Before you start
+- Open the website: https://plantcareai-kznq8jblfdsk3u5jvsw9rt.streamlit.app
+- Keep one clear plant photo and one car photo ready on your computer.
+- If possible, quickly check that the main pages open.
+- Speak slowly. You can skip any feature that does not load.
 
-### 1. Introduction (30 seconds)
-“Good morning. Today I’m presenting PlantCare AI, a plant-care assistant designed to help people identify supported plants, learn their growing requirements, and make more informed care decisions. The idea is to make useful plant information easier to access through one simple website.”
+## 1. Introduction
+**Say:**
 
-### 2. Identify Plant (60 seconds)
-“I’ll start with Identify Plant. I’m uploading a clear plant photo. The vision model compares the image with descriptions of the 56 plants in our reference library and returns a likely match with supporting plant information. I can review the suggested match and its alternatives instead of treating every result as certain.”
+“Hello everyone. Today I’m going to show you my project, PlantCare AI. It is a website that helps people learn about plants, check possible plant problems, and get plant-care guidance. I’ll quickly show you its main features.”
 
-[Upload the prepared plant photo. Wait for the result, then show the common name, scientific name, and care profile.]
+## 2. Identify Plant
+**Do:** Open **Identify Plant** and upload your prepared plant photo.
 
-“Image-based identification can be affected by lighting, focus, plant age, and similar-looking species, so the result should be visually checked. This is a supported-species matcher, not a guarantee that every plant in the world can be identified.”
+**Say:**
 
-### 3. Non-plant check (30 seconds)
-“Next, I’ll use a non-plant image to show the screening safeguards. The system is designed to reject clear non-plant images and to avoid presenting an uncertain match as a confirmed identification.”
+“First, this is Identify Plant. I upload a photo, and the website suggests which supported plant it might be. It also helps me find useful information about that plant.”
 
-[Upload the prepared non-plant photo. Describe the actual result shown on screen. If it is not rejected, do not claim that the test passed; note it as a case for improvement.]
+**When the result appears, say:**
 
-### 4. Visual Health Monitoring (40 seconds)
-“Visual Health Monitoring provides a preliminary visual screen for possible leaf or image concerns. It is a screening aid, not a laboratory test or a confirmed plant-disease diagnosis. I would combine its output with physical checks of soil moisture, drainage, light, and the plant’s recent care history.”
+“Here we can see the result provided by the system. Plant photos can look different because of lighting or camera quality, so I always check whether the suggestion matches the photo.”
 
-[Show the feature using a prepared image and read the actual on-screen result.]
+**Important:** Read the actual result on the screen. Do not say it identified the plant correctly if it did not.
 
-### 5. Plant profiles and care planning (45 seconds)
-“The plant profiles bring together identification clues, scientific names, light, watering, soil, and other general care guidance. In My Plants, I can keep track of plants and create care reminders, such as watering or checking soil moisture.”
+## 3. Non-plant photo test
+**Do:** Upload your prepared car photo, if there is enough time.
 
-[Open a plant profile, then demonstrate adding a plant or creating a reminder if the controls are available.]
+**Say:**
 
-“Please note that in this version, saved plants, reminders, and journal entries are session-based, so they may not persist after a refresh or a new session.”
+“I’m also checking what happens when I upload a photo that is not a plant. The website should avoid treating an ordinary object as a plant.”
 
-### 6. Plant Health Copilot (40 seconds)
-“Plant Health Copilot helps organise observations such as yellow leaves, soil that stays wet, or visible pests into possible causes and practical next steps. Its current guidance is profile-grounded and rule-based. It does not confirm a disease or replace an experienced horticulturist.”
+**Then say what actually happened:**
+- If it rejects the car: “Good, it has rejected this non-plant photo.”
+- If it gives a plant suggestion or an unclear result: “This example shows that the system still needs improvement. I would record this result and test a fix.”
 
-[Select a plant and a couple of symptoms, complete the form, and show the possible causes and action plan.]
+## 4. Visual Health Monitoring
+**Do:** Open **Visual Health Monitoring** and use a prepared image if the feature is available.
 
-### 7. Closing (20 seconds)
-“To summarise, PlantCare AI combines plant matching, reference care information, visual screening, reminders, and guided troubleshooting in one place. Our next priority is continued testing with diverse, labelled real-world photos, measuring both correct plant identification and incorrect non-plant acceptance, and improving reliability based on those results. Thank you.”
+**Say:**
 
-## If a feature fails during the live demo
-Say: “This test has exposed a limitation in the current version. We’re recording it as a test case rather than hiding the result. The next step is to reproduce it, test a fix, and verify that the fix improves the benchmark without breaking other cases.”
+“This feature helps check a plant photo for possible signs of a problem. Its result is only a first check, not a guaranteed disease diagnosis. We should also check the soil, watering, light, and the plant itself.”
 
-## Accuracy wording
-The preliminary benchmark recorded 89.8% top-1 and 95.9% top-3 accuracy on 49 photos covering 49 supported classes. It was a small, preliminary sample and does not establish real-world accuracy across all 56 classes, all camera conditions, or non-plant rejection. Do not describe the system as 100% accurate.
+**Do:** Read the result that actually appears. Do not promise that the feature can detect every disease.
+
+## 5. Plant information and reminders
+**Do:** Open a plant profile or the **My Plants** area.
+
+**Say:**
+
+“Here I can explore plant information and care tips. The website also includes plant tracking and reminders, where available, to help organise regular care.”
+
+**Do:** Show adding a plant or a reminder only if the control works. If you cannot find it quickly, move on.
+
+## 6. Plant Health Copilot
+**Do:** Open **Plant Health Copilot** and show its available questions or symptom options.
+
+**Say:**
+
+“This is Plant Health Copilot. I can enter what I’ve noticed about a plant and use the guidance to consider possible causes and next steps. It is a helpful starting point, but it cannot replace a confirmed expert diagnosis.”
+
+## 7. Ending
+**Say:**
+
+“To sum up, PlantCare AI brings plant identification, plant information, visual checks, care reminders, and troubleshooting guidance together in one website. I’m continuing to test it with more plant photos and improve its reliability. Thank you.”
+
+## If something goes wrong
+Stay calm and say:
+
+“This feature isn’t giving the expected result in this test. I’ll note it as an issue to improve, rather than claim that it worked.”
+
+Then move to the next feature. You do not have to fix the website during the presentation.
+
+## Remember
+- You can read this script directly; **you do not need to memorise it**.
+- Describe only what is actually visible on the website.
+- Do not claim 100% accuracy. A preliminary test achieved 89.8% top-1 accuracy on 49 test photos, which is not a guarantee of real-world performance.
