@@ -47,6 +47,39 @@ def validate_plant_records(records: Iterable[dict[str, Any]], expected_count: in
     return errors
 
 
+def decide_vision_gate(
+    *,
+    quality_ok: bool,
+    general_object_rejected: bool,
+    bio_plant_score: float,
+    bio_object_score: float,
+    document_score: float,
+) -> tuple[bool, str, str]:
+    """Conservative policy for image screening before species ranking.
+
+    Clear non-plant or document evidence is rejected. Ambiguous BioCLIP evidence
+    is allowed to proceed to species ranking so unusual plants are not rejected
+    merely because the safety gate is uncertain.
+    """
+    if not quality_ok:
+        return False, "Photo is too small, dark, or blurred to assess reliably", "quality"
+    if general_object_rejected:
+        return False, "General vision screening recognized a non-plant object", "nonplant"
+
+    plant_score = float(bio_plant_score)
+    object_score = float(bio_object_score)
+    document = float(document_score)
+    margin = plant_score - object_score
+
+    if document >= 0.84 and margin < 4.0:
+        return False, "The image appears to be a text-heavy document or screenshot", "nonplant"
+    if object_score >= 24.0 and margin <= -1.0:
+        return False, "The image is much more consistent with a non-plant object than a living plant", "nonplant"
+    if plant_score >= 18.0 and margin >= 1.5:
+        return True, "Plant evidence is strong enough to continue", "accepted"
+    return True, "Plant presence is uncertain; continuing to species matching", "uncertain"
+
+
 def assess_plant_health(
     plant: dict[str, Any],
     symptoms: Iterable[str],
