@@ -156,3 +156,17 @@ def test_vision_gate_rejects_clear_document_without_plant_evidence():
     )
     assert accepted is False
     assert category == "nonplant"
+
+
+def test_benchmark_taxon_aliases_cover_missing_species_names():
+    from benchmark_56 import TAXON_ALIASES
+    assert "Sansevieria trifasciata" in TAXON_ALIASES["Dracaena trifasciata"]
+    assert "Chrysalidocarpus lutescens" in TAXON_ALIASES["Dypsis lutescens"]
+    assert "Heptapleurum arboricola" in TAXON_ALIASES["Schefflera arboricola"]
+    assert "Bergera koenigii" in TAXON_ALIASES["Murraya koenigii"]
+    assert "Citrus × limon" in TAXON_ALIASES["Citrus limon"]
+
+
+def test_benchmark_uses_the_same_primary_model_as_the_app():
+    source = (ROOT / "benchmark_56.py").read_text(encoding="utf-8")
+    assert 'for model_id in ("hf-hub:imageomics/bioclip", "hf-hub:imageomics/bioclip-2")' in source
