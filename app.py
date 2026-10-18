@@ -1044,14 +1044,9 @@ def vision_gate(img: Image.Image):
     sharp, bright, mindim = image_quality(img)
     if mindim < 100 or bright < 5 or sharp < 1.0:
         return False, 0.0, "Photo is too small, dark, or blurred to assess reliably", {"gate": "quality"}
-    try:
-        raw = io.BytesIO()
-        ImageOps.exif_transpose(img).convert("RGB").save(raw, format="JPEG", quality=90)
-        reject_general, reason, meta = general_object_screen(raw.getvalue())
-        if reject_general:
-            return False, 0.0, reason, {"gate": "general_object", "general": meta}
-    except Exception as exc:
-        meta = {"general_gate_unavailable": type(exc).__name__}
+    # Skip the extra ImageNet/MobileNet model on Streamlit Community Cloud.
+    # Loading a second neural network caused avoidable memory pressure; the
+    # lightweight local plant gate and BioCLIP gate still screen the upload.
     doc_score = _document_visual_score(img)
     if doc_score >= 0.88 and not local_is_plant:
         return False, 0.0, "The image appears to be a text-heavy document or screenshot", {"gate": "document"}
