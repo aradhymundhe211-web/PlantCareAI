@@ -202,3 +202,78 @@ def assess_plant_health(
         "observations": {"soil_moisture": soil_state, "watering_frequency": watering_frequency, "pot_drainage": pot_drainage, "light": light_state, "plant_location": plant_location, "symptom_location": symptom_location, "symptom_duration": symptom_duration, "pest_seen": pest_seen, "recent_change": recent_change},
         "disclaimer": "A text/image screening cannot confirm a pathogen, measure soil moisture or nutrient levels, or replace a qualified horticulturist's assessment.",
     }
+
+
+def answer_copilot_question(question: str, plants: Iterable[dict[str, Any]]) -> str:
+    """Answer common care questions using only the supplied plant library.
+
+    This is deterministic retrieval, not a generative model or a disease diagnosis.
+    It deliberately asks for clarification when it cannot ground an answer.
+    """
+    q = str(question or "").strip().casefold()
+    rows = list(plants.values()) if isinstance(plants, dict) else list(plants)
+    if not q:
+        return "Ask a plant-care question, such as ‘How often should I water Tulsi?’ or ‘What light does a Mango tree need?’"
+
+    # Match an explicit common or scientific name only; do not infer a species.
+    named = []
+    for plant in rows:
+        common = str(plant.get("common_name", "")).strip()
+        scientific = str(plant.get("scientific_name", "")).strip()
+        if common and common.casefold() in q:
+            named.append((len(common), plant))
+        elif scientific and scientific.casefold() in q:
+            named.append((len(scientific), plant))
+    plant = max(named, key=lambda item: item[0])[1] if named else None
+
+    if any(term in q for term in ("yellow", "wilting", "wilt", "brown leaves", "spots", "disease", "sick", "dying", "pest", "insect", "mold", "mould")):
+        base = (
+            "I can help you narrow this down, but symptoms alone do not confirm a disease. "
+            "Check the soil moisture at root depth, drainage, recent changes in light or temperature, "
+            "and both sides of the leaves for pests. Avoid adding pesticide or fertilizer based only on a photo. "
+            "If you tell me the plant name, symptoms, soil condition and how quickly the problem is spreading, "
+            "I can give a more relevant checklist."
+        )
+        if plant:
+            base += f"\n\nFor {plant.get('common_name')} ({plant.get('scientific_name')}), the library lists: watering — {plant.get('water', 'not recorded')}; light — {plant.get('light', 'not recorded')}; soil — {plant.get('soil', 'not recorded')}."
+            diseases = str(plant.get("diseases", "")).strip()
+            pests = str(plant.get("pests", "")).strip()
+            if diseases:
+                base += f"\n\nProblems to monitor in the profile: {diseases}"
+            if pests:
+                base += f"\nPests to inspect for: {pests}"
+        return base
+
+    if not plant:
+        examples = ", ".join(str(p.get("common_name", "")) for p in rows[:8])
+        return (
+            "I can answer from the verified plant profiles bundled with this app, but I could not identify a specific plant in your question. "
+            f"Please include one of the supported plant names (for example: {examples}) and ask about watering, light, soil, temperature, humidity, fertilizer, pruning, propagation, pests, toxicity or pet safety. "
+            "I do not use a paid AI API, and I will not invent details that are missing from the profile."
+        )
+
+    fields = [
+        (("water", "watering", "water"), "water", "Watering"),
+        (("light", "sun", "sunlight", "bright"), "light", "Light"),
+        (("soil", "potting", "mix", "drainage"), "soil", "Soil"),
+        (("fertilizer", "fertiliser", "feed", "nutrient"), "fertilizer", "Fertilizer"),
+        (("temperature", "cold", "heat", "weather"), "temperature", "Temperature"),
+        (("humidity", "humid"), "humidity", "Humidity"),
+        (("pest", "insect", "bug"), "pests", "Pests to monitor"),
+        (("disease", "fungus", "fungal", "rot", "mildew"), "diseases", "Problems to monitor"),
+        (("toxic", "poison", "eat", "edible"), "toxicity", "Toxicity caution"),
+        (("pet", "cat", "dog", "animal"), "pet_safety", "Pet safety"),
+        (("prun", "trim", "cut back"), "pruning", "Pruning"),
+        (("propagat", "cutting", "multiply", "grow another"), "propagation", "Propagation"),
+        (("identify", "recognize", "recognise", "look like", "leaf", "flower"), "identification", "Identification clues"),
+    ]
+    chosen = [(key, label) for terms, key, label in fields if any(term in q for term in terms)]
+    if not chosen:
+        chosen = [("water", "Watering"), ("light", "Light"), ("soil", "Soil")]
+    answer = [f"For {plant.get('common_name')} ({plant.get('scientific_name')}), here is what the PlantCare AI reference profile says:"]
+    for key, label in chosen[:3]:
+        value = str(plant.get(key, "")).strip()
+        if value:
+            answer.append(f"**{label}:** {value}")
+    answer.append("These are general profile notes, not a diagnosis. Check the plant's actual conditions and seek local horticultural advice if it is rapidly deteriorating.")
+    return "\n\n".join(answer)
