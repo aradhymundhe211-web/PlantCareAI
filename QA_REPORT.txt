@@ -1,3 +1,10 @@
+CURRENT STATUS UPDATE — 2026-10-18 20:48 IST
+- Latest GitHub Actions run #49 completed successfully: syntax compilation and the automated pytest suite passed on commit 584ef6f248996058e282fa8276f339a79292f2c5.
+- This verifies the checked source and policy/data tests only. It does not execute BioCLIP inference, download the model, test all 56 species photos, or exercise the deployed Streamlit UI.
+- The latest measured model benchmark remains the preliminary 49-photo/49-class result recorded below: 44/49 top-1 (89.8%) and 47/49 top-3 (95.9%). It is not a 56-class or real-world accuracy certification.
+- Do not describe the app as 100% accurate. To establish performance, run a held-out benchmark with multiple independently sourced images for each of the 56 species, review per-class errors, then manually test the live deployment with known plant and non-plant examples.
+- The live deployment was not accessible to the browser inspection used in this audit, so no claim is made that every page or live identification path was verified.
+
 PlantCare AI — audit and validation report
 Audit date: 2026-10-18
 Repository: aradhymundhe211-web/PlantCareAI (main)
