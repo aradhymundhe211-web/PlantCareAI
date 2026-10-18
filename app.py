@@ -657,6 +657,26 @@ def bioclip_text_features():
             prompts.extend([
                 "Maranta leuconeura prayer plant with oval patterned leaves and red veins radiating from the midrib",
                 "close-up of prayer plant foliage with dark green patches, lighter green background and red-pink veins, not Calathea orbifolia",
+                "Maranta leuconeura low-growing prayer plant with paired oval leaves, herringbone vein pattern and reddish midrib-side veins",
+                "botanical close-up of Maranta prayer plant leaves, oval leaf blades with alternating dark and light green markings",
+            ])
+        elif common == "ZZ Plant":
+            prompts.extend([
+                "Zamioculcas zamiifolia ZZ houseplant, thick fleshy upright leaf stalks with paired glossy oval leaflets along each stalk",
+                "close-up of ZZ plant pinnate leaves, smooth thick waxy dark green leaflets on arching succulent petioles, not bamboo canes",
+                "Zamioculcas zamiifolia growing from thick underground rhizomes, feather-like compound leaves with rounded leaflets",
+            ])
+        elif common == "Aglaonema":
+            prompts.extend([
+                "Aglaonema Chinese evergreen houseplant, broad oval pointed leaves with silver or pale green patterned centres and dark green margins",
+                "close-up of Aglaonema commutatum foliage, symmetrical silver-green variegation on broad leaves with a central midrib",
+                "Chinese evergreen Aglaonema compact clump of patterned leaves emerging from short cane-like stems, distinguish from Dieffenbachia",
+            ])
+        elif common == "Mango":
+            prompts.extend([
+                "Mangifera indica mango tree, long narrow leathery lanceolate leaves with smooth edges and pointed tips, leaves alternate along woody twigs",
+                "close-up of mango foliage with simple entire-edged elongated leaves and prominent pale midrib, not pinnate neem leaflets",
+                "mango tree branch with clusters of long glossy narrow leaves and small mango fruits, botanical field photograph",
             ])
         # Include structured profile traits too, but cap their length to avoid generic filler
         # dominating the text embedding. Keep species-specific MODEL_HINTS as the anchor.
