@@ -16,7 +16,7 @@ APP_DIR = Path(__file__).resolve().parent
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
-from plantcare_core import assess_plant_health, validate_plant_records
+from plantcare_core import assess_plant_health, answer_copilot_question, validate_plant_records
 
 import numpy as np
 import requests
@@ -1075,34 +1075,13 @@ def clue_tokens(leaf_shape,leaf_texture,flowers,growth,thorns):
 
 
 def identify_locally(img: Image.Image, clues: List[str]) -> List[Tuple[dict,float]]:
-    """Conservative offline shortlist. Never invent a species from color alone.
+    """Return no species prediction without a vision model.
 
-    Without the vision model there is not enough evidence for reliable species
-    identification from pixels alone, so this fallback only returns candidates
-    when the user supplied explicit botanical clues.
+    Leaf clues and pixel colours are not a validated species classifier. Returning
+    an empty result is safer than inventing a plant name when model weights fail.
+    Kept as a compatibility shim for callers from earlier project versions.
     """
-    f=rgb_features(img)
-    rows=[]
-    for p in PLANTS:
-        text=" ".join(str(p.get(k,"")) for k in ["common_name","category","identification","leaf","flower","growth","similar"]).lower()
-        score=0.0
-        for c in clues:
-            if c in text:
-                score += .16
-        cat=str(p.get("category"," ")).lower()
-        # Image colors provide only weak category evidence; they can never
-        # create a species match by themselves.
-        if "flower" in cat and (f["red_ratio"]+f["yellow_ratio"])>.035: score+=.02
-        if "succulent" in cat and f["sat"]>.32: score+=.015
-        if "fruit" in cat and f["yellow_ratio"]>.03: score+=.01
-        if "herb" in cat and f["green_ratio"]>.20: score+=.01
-        if score>0: rows.append((p,float(score)))
-    rows.sort(key=lambda x:x[1],reverse=True)
-    if not clues:
-        return []
-    # Require at least one meaningful clue match. Ties remain a shortlist, not
-    # a claimed identification.
-    return [r for r in rows[:6] if r[1]>=.16]
+    return []
 
 
 def visual_health_screen(img: Image.Image) -> dict:
@@ -1238,37 +1217,6 @@ def care_assessment(img: Image.Image, p: dict, health: dict) -> dict:
         "growth_detail": "Take repeat photos from a similar distance and angle to track new leaves, height and overall growth.",
     }
 
-
-def plantcare_score(plant: dict, health: dict | None, care: dict | None) -> tuple[int, str]:
-    """Conservative 0–100 care-readiness score based only on visible/photo evidence and profile guidance."""
-    score = 70
-    if health:
-        level = str(health.get("level","")).lower()
-        if "good" in level or "healthy" in level:
-            score += 12
-        elif "watch" in level or "stress" in level:
-            score -= 10
-        elif "concern" in level or "poor" in level:
-            score -= 18
-        score -= min(15, int(float(health.get("yellow",0))*30))
-        score -= min(15, int(float(health.get("brown",0))*35))
-    if care:
-        for key in ("water_status","fertilizer_status","sunlight_status","growth_status"):
-            value = str(care.get(key,"")).lower()
-            if any(x in value for x in ("good","appropriate","on track","okay","adequate")):
-                score += 2
-            elif any(x in value for x in ("watch","check","attention")):
-                score -= 2
-    score = max(0, min(100, score))
-    if score >= 85:
-        band = "Excellent care readiness"
-    elif score >= 70:
-        band = "Good care readiness"
-    elif score >= 50:
-        band = "Needs attention"
-    else:
-        band = "Needs a closer check"
-    return score, band
 
 def confidence_label(rows: List[Tuple[dict,float]]) -> Tuple[str,int]:
     if not rows:
@@ -1623,7 +1571,7 @@ elif page=="Identify a Plant":
             st.session_state.selected_image_source = "Gallery"
             st.session_state.selected_image_name = uploaded.name or "gallery_photo"
             st.session_state.analysis = None
-    st.markdown('<div class="pc-how"><div class="pc-how-title">How It Works?</div><div class="pc-how-grid"><div class="pc-how-step"><div class="pc-how-icon">🛡️</div><b>1. Smart Rejection</b><span>Non-plant check</span></div><div class="pc-how-step"><div class="pc-how-icon">🌿</div><b>2. Visual Health Check</b><span>Plant health analysis</span></div><div class="pc-how-step"><div class="pc-how-icon">🔬</div><b>3. Plant Identification</b><span>BioCLIP vision model</span></div><div class="pc-how-step"><div class="pc-how-icon">🌱</div><b>4. Care Recommendations</b><span>PlantCare Score</span></div></div></div>',unsafe_allow_html=True)
+    st.markdown('<div class="pc-how"><div class="pc-how-title">How It Works?</div><div class="pc-how-grid"><div class="pc-how-step"><div class="pc-how-icon">🛡️</div><b>1. Smart Rejection</b><span>Non-plant check</span></div><div class="pc-how-step"><div class="pc-how-icon">🌿</div><b>2. Visual Health Check</b><span>Plant health analysis</span></div><div class="pc-how-step"><div class="pc-how-icon">🔬</div><b>3. Plant Identification</b><span>BioCLIP vision model</span></div><div class="pc-how-step"><div class="pc-how-icon">🌱</div><b>4. Care Recommendations</b><span>Care checklist</span></div></div></div>',unsafe_allow_html=True)
 
     raw=st.session_state.selected_image_bytes
     if raw:
@@ -1716,18 +1664,13 @@ elif page=="Identify a Plant":
                                     care=care_assessment(image, rows[0][0], health)
                                     st.session_state.analysis={"rows":rows,"label":label,"conf":conf,"score":1.0,"model_note":model_note,"model_error":model_error,"health":health,"care":care,"species_unavailable":False}
                             elif not reject_object:
-                                # BioCLIP could not run. Use the local visual screen only
-                                # as a plant-presence fallback; do not claim a species unless
-                                # the user supplied meaningful botanical clues. Do not enter
-                                # this branch after the plant-presence gate has rejected an image.
-                                local_is_plant,local_score,local_reason,local_features=plant_gate(image)
-                                rows=identify_locally(image,clues)[:4] if local_is_plant else []
-                                health=visual_health_screen(image)
-                                if rows:
-                                    st.session_state.analysis={"rows":rows,"label":"Needs confirmation","conf":50,"score":local_score,"model_note":"Clue-assisted local shortlist — vision model unavailable","model_error":model_error,"health":health,"care":care_assessment(image, rows[0][0], health),"species_unavailable":False}
-                                else:
-                                    # Crucially, a failed model download is not reported as "No plant detected".
-                                    st.session_state.analysis={"rows":[],"label":"Needs confirmation","conf":0,"score":local_score,"model_note":"Vision model unavailable","model_error":model_error,"health":health,"care":None,"species_unavailable":True}
+                                # A model-loading failure is not evidence that a photo contains
+                                # no plant. Do not invent species matches from colour or manual clues.
+                                st.session_state.analysis={
+                                    "rows":[], "label":"Identification unavailable", "conf":0,
+                                    "model_note":"Vision model unavailable", "model_error":model_error,
+                                    "health":None, "care":None, "species_unavailable":True
+                                }
         except Exception as exc:
             st.session_state.analysis=None
             # Distinguish a genuinely invalid image from a processing bug. This avoids
@@ -1748,7 +1691,7 @@ elif page=="Identify a Plant":
     if result and result.get("nonplant"):
         st.markdown(f'<div class="pc-error"><b>🚫 NO PLANT DETECTED / PLANT NOT VERIFIED</b><br>{result["reason"]}. Try a clear, well-lit photo of a real plant with leaves, stems or flowers filling most of the frame. Ordinary objects must not be forced into a plant name.</div>',unsafe_allow_html=True)
     elif result and result.get("species_unavailable"):
-        st.markdown('<div class="pc-warning"><b>🌱 Plant detected, but species identification is temporarily unavailable.</b><br>No plant name was guessed. Check the internet connection and press <b>ANALYZE IMAGE</b> again, or add the optional leaf/flower clues to get a conservative shortlist.</div>',unsafe_allow_html=True)
+        st.markdown('<div class="pc-warning"><b>🌿 Species identification is temporarily unavailable.</b><br>The vision model could not produce a reliable result, so PlantCare AI will not guess a species or claim that a plant was confirmed. Check the deployment logs and retry when the model is available.</div>',unsafe_allow_html=True)
         health=result.get("health")
         if health:
             st.markdown("### 🩺 Visual health screening")
@@ -1760,11 +1703,10 @@ elif page=="Identify a Plant":
         st.caption(f"Analysis engine: {result.get('model_note','')}")
         if result.get("model_error"):
             st.warning("The main vision model could not be loaded, so this result is only a local shortlist. Check the internet connection and try Analyze again.")
-        st.markdown(f'<div class="pc-result"><div style="font-size:.78rem;font-weight:900;color:#64766b;text-transform:uppercase;letter-spacing:.08em">TOP PLANT MATCH</div><div class="pc-result-name">🌿 {top["common_name"]}</div><div class="pc-scientific"><b>Common name:</b> {top["common_name"]} &nbsp; · &nbsp; <i>{top["scientific_name"]}</i> · {top["family"]}</div><div class="pc-badge">{result["label"]} · {result["conf"]}% visual-match score</div></div>',unsafe_allow_html=True)
+        st.markdown(f'<div class="pc-result"><div style="font-size:.78rem;font-weight:900;color:#64766b;text-transform:uppercase;letter-spacing:.08em">TOP PLANT MATCH</div><div class="pc-result-name">🌿 {top["common_name"]}</div><div class="pc-scientific"><b>Common name:</b> {top["common_name"]} &nbsp; · &nbsp; <i>{top["scientific_name"]}</i> · {top["family"]}</div><div class="pc-badge">{result["label"]} · relative model ranking</div></div>',unsafe_allow_html=True)
         if result["label"] in ["Possible match","Needs confirmation"] or "confirm visually" in result["label"]:
             st.markdown('<div class="pc-warning"><b>Confirm before relying on the name:</b> visually similar plants can look alike. Use the alternatives and the reference photo below.</div>',unsafe_allow_html=True)
-        score_value=int(result.get("conf",50))
-        st.markdown(f'<div class="pc-score"><div class="pc-score-ring">{score_value}</div><div class="pc-score-copy"><div class="pc-score-title">Identification confidence band</div><div class="pc-score-sub">This is a visual-match band, not a calibrated probability. Compare the plant profile and alternatives when the band is not strong.</div></div></div>',unsafe_allow_html=True)
+        st.markdown('<div class="pc-info"><b>How to read the result:</b> the label describes relative separation between model candidates, not a calibrated probability. Compare the alternative species and visible traits before relying on the name.</div>',unsafe_allow_html=True)
 
         # Signature feature: explainable match passport. These are profile traits
         # for the user to compare with the uploaded photo, not claims that every
@@ -1805,8 +1747,7 @@ elif page=="Identify a Plant":
             st.markdown(f'<div class="pc-warning"><b>Important:</b> {health_issue_text(top,health)}<br><small>This is a colour-pattern screen only. It cannot confirm plant health, diagnose disease, detect pests reliably, or measure soil moisture or nutrients.</small></div>',unsafe_allow_html=True)
         st.markdown("### 🩺 PlantCare check")
         care=result.get("care") or care_assessment(image, top, health or visual_health_screen(image))
-        pcs, pcb = plantcare_score(top, health, care)
-        st.markdown(f'<div class="pc-score"><div class="pc-score-ring">{pcs}</div><div class="pc-score-copy"><div class="pc-score-title">🌿 PlantCare Score</div><div class="pc-score-sub"><b>{pcb}</b> · A conservative photo-based care-readiness indicator, not a medical or horticultural diagnosis.</div></div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pc-info"><b>Care checklist:</b> the items below are prompts for physical checks. A photo alone cannot establish overall plant health or measure soil, roots or nutrients.</div>', unsafe_allow_html=True)
         care_cards=[
             ("💧 Water / hydration", care["water_status"], care["water_detail"]),
             ("🌿 Fertilizer", care["fertilizer_status"], care["fertilizer_detail"]),
@@ -2019,6 +1960,26 @@ elif page=="Plant Health Copilot":
         '<div class="pc-info"><b>How it works:</b> This version uses a transparent rule-based checklist. It cannot confirm pathogens, measure soil moisture, or replace an experienced horticulturist. The selected plant profile supplies general care context.</div>',
         unsafe_allow_html=True,
     )
+    st.markdown("### 💬 Ask PlantCare Copilot")
+    st.caption("Local knowledge-base chat: answers are retrieved from the 56 plant profiles and simple safety rules. No paid AI API is used; this is not a general-purpose language model.")
+    if "copilot_chat_messages" not in st.session_state:
+        st.session_state.copilot_chat_messages = []
+    for chat_message in st.session_state.copilot_chat_messages[-12:]:
+        with st.chat_message(chat_message["role"]):
+            st.markdown(chat_message["content"])
+    user_question = st.chat_input("Ask about watering, light, soil, pests, or a supported plant…", key="copilot_chat_input")
+    if user_question:
+        st.session_state.copilot_chat_messages.append({"role": "user", "content": user_question})
+        answer = answer_copilot_question(user_question, PLANTS)
+        st.session_state.copilot_chat_messages.append({"role": "assistant", "content": answer})
+        st.rerun()
+    chat_col1, chat_col2 = st.columns([1, 5])
+    with chat_col1:
+        if st.button("Clear chat", key="clear_copilot_chat"):
+            st.session_state.copilot_chat_messages = []
+            st.rerun()
+    st.markdown("---")
+    st.markdown("### 🧾 Guided symptom assessment")
     with st.form("health_copilot_form_v1"):
         plant_name = st.selectbox("Which plant are you checking?", [p["common_name"] for p in PLANTS], key="copilot_plant_v1")
         symptoms = st.multiselect(
