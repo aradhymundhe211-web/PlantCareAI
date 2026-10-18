@@ -518,7 +518,7 @@ def load_bioclip():
             return device, model, preprocess, tokenizer
         except Exception as exc:
             errors.append(f"{model_id}: {type(exc).__name__}")
-    raise RuntimeError("Could not load BioCLIP 2 or BioCLIP (" + "; ".join(errors) + ")")
+    raise RuntimeError("Could not load the original BioCLIP checkpoint (" + "; ".join(errors) + ")")
 
 
 MODEL_HINTS = {
@@ -1636,7 +1636,7 @@ elif page=="Identify a Plant":
                 with c4: growth=st.selectbox("Growth habit",["Not sure","Upright","Trailing/vining","Clumping","Tree/shrub","Rosette"],key="growth_v5")
                 with c5: thorns=st.selectbox("Thorns / spines",["Not sure","Present","Not visible"],key="thorns_v5")
 
-            id_engine_copy = "PlantCare AI uses BioCLIP 2 first, then falls back to the original BioCLIP if the newer model cannot load. It compares multiple botanical descriptions and image views across the 56 supported plants. The filename is never used to choose the plant."
+            id_engine_copy = "PlantCare AI compares the image with botanical descriptions for the 56 supported species using the original BioCLIP vision model. The filename is never used to choose the plant. Results are model-ranked suggestions, not a guarantee of identity."
             st.markdown(f'<div class="pc-analyze-box"><div><b>Ready to identify this photo?</b><br><span>{id_engine_copy}</span></div></div>',unsafe_allow_html=True)
             analyze=st.button("🔎  ANALYZE IMAGE",type="primary",width="stretch",key="analyze_v10")
             cclear,_=st.columns([1,4])
@@ -1711,7 +1711,7 @@ elif page=="Identify a Plant":
                                         adjusted.append((p, min(1.0, s + bonus)))
                                     rows = sorted(adjusted, key=lambda x: x[1], reverse=True)
                                 label, conf = confidence_label(rows)
-                                model_note = "BioCLIP 2 / BioCLIP local biology vision model"
+                                model_note = "Original BioCLIP local biology vision model (56 supported species)"
                                 health = visual_health_screen(image)
                                 care = care_assessment(image, rows[0][0], health)
                                 st.session_state.analysis = {
