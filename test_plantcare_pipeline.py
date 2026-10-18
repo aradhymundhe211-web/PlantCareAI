@@ -20,8 +20,9 @@ class PipelineWiringTests(unittest.TestCase):
         self.assertIn("except Exception:", APP)
         self.assertIn("let species matching attempt a result", APP)
 
-    def test_bioclip2_is_tried_before_original_bioclip_fallback(self):
-        self.assertIn('for model_id in ("hf-hub:imageomics/bioclip-2", "hf-hub:imageomics/bioclip")', APP)
+    def test_memory_limited_deployment_uses_original_bioclip_only(self):
+        self.assertIn('for model_id in ("hf-hub:imageomics/bioclip",):', APP)
+        self.assertNotIn('for model_id in ("hf-hub:imageomics/bioclip-2", "hf-hub:imageomics/bioclip")', APP)
 
     def test_identification_ui_does_not_present_an_uncalibrated_percentage(self):
         self.assertNotIn("Confidence: {result['conf']}%", APP)
