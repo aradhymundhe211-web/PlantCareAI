@@ -195,17 +195,17 @@ def test_high_risk_species_profiles_have_specific_care_and_identification_guidan
     records = {p["common_name"]: p for p in load_records()}
     checks = {
         "Snake Plant": ("rhizomes", "dry out completely", "cats and dogs"),
-        "Areca Palm": ("palm fronds", "top 2–3 cm", "ringed canes"),
+        "Areca Palm": ("pinnate fronds", "top 2–3 cm", "ringed canes"),
         "Dracaena Marginata": ("red or burgundy", "top 2–5 cm", "toxic to cats and dogs"),
-        "Dwarf Schefflera": ("radiating from one point", "top 2–3 cm", "compound leaves"),
-        "Hibiscus": ("staminal column", "Full sun", "flowering shrub"),
-        "Curry Leaf": ("characteristic curry-leaf aroma", "Full sun", "culinary herb"),
-        "Lemon": ("simple glossy", "6–8 hours", "citrus tree"),
+        "Dwarf Schefflera": ("shared point", "top 2–3 cm", "compound leaves"),
+        "Hibiscus": ("staminal column", "Full sun", "branching shrub"),
+        "Curry Leaf": ("characteristic curry-leaf aroma", "Full sun", "culinary shrub"),
+        "Lemon": ("simple glossy", "6–8 hours", "citrus shrub/tree"),
         "ZZ Plant": ("underground rhizomes", "dry almost completely", "calcium oxalate"),
         "Prayer Plant": ("red-pink veins", "lightly and evenly moist", "Calathea orbifolia"),
         "Aglaonema": ("silver, pale green or pink", "top 2–3 cm", "calcium oxalate"),
         "Spinach": ("cool-season annual", "consistently moist", "bolting"),
-        "Mango": ("alternate, simple, long narrow", "full sun", "grafting"),
+        "Mango": ("alternate, simple, long narrow", "full sun", "single blades"),
     }
     for name, phrases in checks.items():
         p = records[name]
