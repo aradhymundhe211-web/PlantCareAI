@@ -901,7 +901,10 @@ def _analysis_views(img: Image.Image) -> List[Image.Image]:
         views.append(im.crop((left,top,left+side,top+side)))
     if h>220:
         views.append(im.crop((0,0,w,int(h*.82))))
-    return views[:2]
+    # The benchmark uses up to three complementary views. Keep the full frame,
+    # vegetation-focused crop, and context crop available to species ranking.
+    # Explicit screening gates slice to the first two views where latency matters.
+    return views[:3]
 
 def bioclip_rank(img: Image.Image, filename_hint: str = ""):
     """Rank the 56 supported plants with BioCLIP across several image views.
@@ -1774,7 +1777,12 @@ elif page=="Identify a Plant":
             st.caption("Health screening is visual only and does not identify a disease.")
     elif result and result.get("rows"):
         top=result["rows"][0][0]
-        st.success("🌱 PLANT PHOTO ACCEPTED")
+        if result.get("label") == "Needs confirmation":
+            st.warning("🌿 POSSIBLE PLANT MATCH — CONFIRMATION NEEDED")
+        elif result.get("label") == "Possible match":
+            st.info("🌿 POSSIBLE PLANT MATCH — CHECK THE ALTERNATIVES")
+        else:
+            st.success("🌱 TOP PLANT MATCH FOUND — VERIFY VISUALLY")
         st.caption(f"Analysis engine: {result.get('model_note','')}")
         if result.get("model_error"):
             st.warning("The main vision model could not be loaded, so this result is only a local shortlist. Check the internet connection and try Analyze again.")
