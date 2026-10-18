@@ -1,28 +1,38 @@
-PlantCare AI — QA and Repair Report (2026-10-17)
+PlantCare AI — audit and repair report (2026-10-18)
 
-Critical issue found in the uploaded app.py:
-- Several functions were called by the identification flow but missing from the file: bioclip_rank, bioclip_gate_text_features, bioclip_context_text_features, bioclip_context_screen, bioclip_gate, _analysis_views, _focus_crop, _document_visual_score, and reference_features_for_candidates.
-- Because these functions were absent, the identification path could fail before reaching species matching. This explains why valid plant photos could be rejected or not identified.
+Input inspected: PlantCareAI-main (1).zip uploaded in this conversation.
 
-Repairs made:
-- Restored missing helper functions from the original project source.
-- Implemented bioclip_rank for the current prompt-feature format, ranking the 56 plant records across multiple views.
-- Made the plant-presence gate permissive when uncertain, while retaining strong general-object rejection and a document check.
-- Changed model-load failure handling so it does not incorrectly report “No plant detected” merely because model weights are unavailable.
-- Removed unused Pl@ntNet client and API-key setup code.
-- Kept the existing plant library and Plant Health Copilot logic.
+Confirmed in source:
+- plant_data.json contains 56 unique, complete profile records.
+- Model hints exist for all 56 records.
+- Identification uses BioCLIP 2 with original BioCLIP fallback, multi-prompt and multi-view image/text ranking.
+- A MobileNetV3-Small ImageNet screen and BioCLIP text screens are used as non-plant safeguards when the weights are available.
+- Health screening is a colour-mask heuristic, not a trained health classifier.
+- The structured Copilot uses rules and plant profile information.
 
-Verification completed locally:
-- Python syntax compilation for app.py, plantcare_core.py, and tests.
-- Unit tests for the 56-record plant library and Plant Health Copilot.
-- Static audit confirms the functions referenced by the identification pipeline are now defined.
-- ZIP integrity check.
+Repairs in this build:
+- Removed the local colour/manual-clue fallback that could create unsupported species shortlists when the vision model failed. It now returns an explicit unavailable result instead of a species guess.
+- Removed the numerical PlantCare Score because the underlying evidence cannot support a valid overall health/care score.
+- Removed the percentage-style presentation of identification confidence; the UI explains that the category is a relative ranking signal, not a calibrated probability.
+- Added a chat-style profile-grounded Copilot that does not require a paid AI inference API.
+- Updated Python dependency pins for a more consistent Python 3.11 environment, including NumPy 1.26.4 with the pinned PyTorch version.
+- Removed the unused optional Pl@ntNet client and its tests from this no-paid-API build.
+- Updated documentation to state limits and test commands accurately.
+
+Local verification:
+- Python syntax compilation passed.
+- Lightweight unit tests passed (see terminal verification during build).
+- ZIP archive integrity checked after packaging.
 
 Not verified:
-- Streamlit is not installed in this execution environment; no browser/server smoke test was possible.
-- open_clip_torch is not installed; no live BioCLIP weights download or inference was performed.
-- No labelled test set for all 56 plants was supplied, so species accuracy cannot be certified.
-- BioCLIP 2 weights are large and must be downloaded at runtime; free hosting memory/disk/network constraints may affect startup.
-- Plant Health Copilot provides symptom-based screening and safe checks, not a confirmed diagnosis. Photo colour screening cannot identify a pathogen or measure soil moisture/nutrients.
+- Streamlit was not installed in the audit environment; no full browser/server smoke test was run.
+- open_clip_torch was not installed; BioCLIP weights were not downloaded and live inference was not run.
+- No independent labelled image set for the 56 classes was supplied; accuracy cannot be certified.
+- The model checkpoints may exceed free-hosting memory, disk, network or startup limits.
+- Car/non-plant rejection has not been validated on a held-out test set; safeguards are not infallible.
 
-Recommended validation after deployment: test clear Tulsi, mint, mango, marigold and Fortuner images, then inspect Streamlit Cloud logs if the model does not load. Do not claim 100% accuracy.
+Required next validation after deployment:
+1. Check Streamlit logs for dependency/model-loading errors.
+2. Test camera and gallery with the same known plant photos.
+3. Test cars, people, indoor objects, non-supported plants, text screenshots, blurred/dark photos.
+4. Build a held-out, correctly labelled image set for all 56 classes and report per-class precision/recall, confusion matrix, and non-plant false-accept rate before making accuracy claims.
