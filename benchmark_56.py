@@ -162,11 +162,16 @@ def analysis_views(img):
 
 def prompts_for(plant, hint):
     common, scientific = plant["common_name"], plant["scientific_name"]
+    # Mirror the app's diverse, plant-part-aware prompt ensemble.
     prompts = [
         f"a real photograph of the whole living {common} plant, {scientific}",
         f"a botanical photograph showing the identifying leaves of {common}, {scientific}",
         f"a close-up photograph of the foliage and leaf arrangement of {common}, {scientific}",
         f"a field photograph of {scientific} growing naturally",
+        f"a plant identification guide photograph of {common} ({scientific}); {hint}",
+        f"a close-up botanical photograph of {common} leaves and stems; diagnostic traits: {hint}",
+        f"a clear photograph of the natural growth habit of {common}, {scientific}; {hint}",
+        f"a real garden photograph of {common} foliage, stems, and leaf arrangement; {hint}",
     ]
     if hint:
         prompts.extend([
@@ -190,6 +195,15 @@ def prompts_for(plant, hint):
             "Mentha spicata botanical field photograph with narrow terminal flower spikes",
             "mint herb growing in a garden, paired serrated leaves on a spreading stem",
         ])
+    profile_traits = " ".join(
+        str(plant.get(k, "")).strip()
+        for k in ("leaf", "flower", "growth")
+        if str(plant.get(k, "")).strip()
+    )
+    if profile_traits:
+        prompts.append(
+            f"botanical field guide image of {common} ({scientific}); {profile_traits[:320]}"
+        )
     return list(dict.fromkeys(prompts))
 
 
@@ -272,9 +286,9 @@ def main():
                         (100.0 * feat @ features.T).max(dim=1).values.squeeze(0)
                         for features in prompt_features
                     ])
-                    view_logits.append(.70 * proto_scores + .30 * prompt_scores)
+                    view_logits.append(.58 * proto_scores + .42 * prompt_scores)
                 stacked = torch.stack(view_logits)
-                logits = .75 * stacked.mean(dim=0) + .25 * stacked.max(dim=0).values
+                logits = .62 * stacked.mean(dim=0) + .38 * stacked.max(dim=0).values
                 probs = torch.softmax(logits, dim=0).cpu().numpy()
             order = np.argsort(-probs)
             top1, top3 = plants[int(order[0])]["common_name"], [plants[int(i)]["common_name"] for i in order[:3]]
