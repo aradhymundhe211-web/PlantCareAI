@@ -558,7 +558,7 @@ MODEL_HINTS = {
     "Amla": "amla, Phyllanthus emblica, small closely spaced leaves along branchlets and round fruit",
     "Coconut": "coconut palm, Cocos nucifera, tall palm trunk and long feather-like fronds",
     "Bamboo": "bamboo, Bambusa, tall segmented hollow-looking green culms and narrow leaves",
-    "ZZ Plant": "Zamioculcas zamiifolia, thick fleshy upright or arching pinnate leaf stalks carrying paired glossy oval leaflets, leaflets smooth and waxy, grows from thick underground rhizomes, not bamboo canes or segmented bamboo canes",
+    "ZZ Plant": "Zamioculcas zamiifolia, thick fleshy upright or arching pinnate leaf stalks carrying paired glossy oval leaflets, leaflets smooth and waxy, grows from thick underground rhizomes, not bamboo canes; not segmented bamboo canes",
     "Heartleaf Philodendron": "Philodendron hederaceum, trailing vine with smooth heart-shaped leaves and pointed tips",
     "Fiddle Leaf Fig": "Ficus lyrata, large violin-shaped leathery leaves with prominent pale veins",
     "Lucky Bamboo": "Dracaena sanderiana, smooth upright green cane stems with clearly visible ring-shaped nodes and tufts of narrow lance-shaped leaves; often grown in water, not true bamboo",
