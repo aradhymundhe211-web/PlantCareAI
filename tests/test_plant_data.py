@@ -190,3 +190,25 @@ def test_all_high_risk_and_unbenchmarked_species_have_diagnostic_hints():
     for name, phrases in required.items():
         for phrase in phrases:
             assert phrase.casefold() in hints[name].casefold(), (name, phrase)
+
+def test_high_risk_species_profiles_have_specific_care_and_identification_guidance():
+    records = {p["common_name"]: p for p in load_records()}
+    checks = {
+        "Snake Plant": ("rhizomes", "dry out completely", "cats and dogs"),
+        "Areca Palm": ("palm fronds", "top 2–3 cm", "ringed canes"),
+        "Dracaena Marginata": ("red or burgundy", "top 2–5 cm", "toxic to cats and dogs"),
+        "Dwarf Schefflera": ("radiating from one point", "top 2–3 cm", "compound leaves"),
+        "Hibiscus": ("staminal column", "Full sun", "flowering shrub"),
+        "Curry Leaf": ("characteristic curry-leaf aroma", "Full sun", "culinary herb"),
+        "Lemon": ("simple glossy", "6–8 hours", "citrus tree"),
+        "ZZ Plant": ("underground rhizomes", "dry almost completely", "calcium oxalate"),
+        "Prayer Plant": ("red-pink veins", "lightly and evenly moist", "Calathea orbifolia"),
+        "Aglaonema": ("silver, pale green or pink", "top 2–3 cm", "calcium oxalate"),
+        "Spinach": ("cool-season annual", "consistently moist", "bolting"),
+        "Mango": ("alternate, simple, long narrow", "full sun", "grafting"),
+    }
+    for name, phrases in checks.items():
+        p = records[name]
+        combined = " ".join(str(p.get(k, "")) for k in ("identification", "leaf", "growth", "light", "water", "toxicity", "pet_safety", "similar")).casefold()
+        for phrase in phrases:
+            assert phrase.casefold() in combined, (name, phrase)
