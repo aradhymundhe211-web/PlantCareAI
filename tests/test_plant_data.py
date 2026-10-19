@@ -156,3 +156,76 @@ def test_vision_gate_rejects_clear_document_without_plant_evidence():
     )
     assert accepted is False
     assert category == "nonplant"
+
+
+def test_benchmark_taxon_aliases_cover_missing_species_names():
+    from benchmark_56 import TAXON_ALIASES
+    assert "Sansevieria trifasciata" in TAXON_ALIASES["Dracaena trifasciata"]
+    assert "Chrysalidocarpus lutescens" in TAXON_ALIASES["Dypsis lutescens"]
+    assert "Heptapleurum arboricola" in TAXON_ALIASES["Schefflera arboricola"]
+    assert "Bergera koenigii" in TAXON_ALIASES["Murraya koenigii"]
+    assert "Citrus × limon" in TAXON_ALIASES["Citrus limon"]
+
+
+def test_benchmark_uses_the_same_primary_model_as_the_app():
+    source = (ROOT / "benchmark_56.py").read_text(encoding="utf-8")
+    assert 'for model_id in ("hf-hub:imageomics/bioclip", "hf-hub:imageomics/bioclip-2")' in source
+
+def test_all_high_risk_and_unbenchmarked_species_have_diagnostic_hints():
+    hints = dict(load_model_hints())
+    required = {
+        "Snake Plant": ("Sansevieria trifasciata", "rhizomes"),
+        "Areca Palm": ("Chrysalidocarpus lutescens", "fronds"),
+        "Dracaena Marginata": ("red or burgundy leaf edges", "woody cane-like stems"),
+        "Dwarf Schefflera": ("Heptapleurum arboricola", "radiating from one central point"),
+        "Hibiscus": ("five broad petals", "staminal column"),
+        "Curry Leaf": ("Bergera koenigii", "pinnate compound leaves"),
+        "Lemon": ("Citrus x limon", "simple glossy oval"),
+        "ZZ Plant": ("underground rhizomes", "not segmented bamboo canes"),
+        "Prayer Plant": ("red-pink veins", "not broad round Calathea orbifolia"),
+        "Aglaonema": ("silver or pale green patterned centres", "Dieffenbachia"),
+        "Spinach": ("basal rosette", "no floating circular aquatic leaves"),
+        "Mango": ("alternate simple long narrow", "not pinnate leaflets like neem"),
+    }
+    for name, phrases in required.items():
+        for phrase in phrases:
+            assert phrase.casefold() in hints[name].casefold(), (name, phrase)
+
+def test_high_risk_species_profiles_have_specific_care_and_identification_guidance():
+    records = {p["common_name"]: p for p in load_records()}
+    checks = {
+        "Snake Plant": ("rhizomes", "dry out completely", "cats and dogs"),
+        "Areca Palm": ("pinnate fronds", "top 2–3 cm", "ringed canes"),
+        "Dracaena Marginata": ("red or burgundy", "top 2–5 cm", "toxic to cats and dogs"),
+        "Dwarf Schefflera": ("shared point", "top 2–3 cm", "compound leaves"),
+        "Hibiscus": ("staminal column", "Full sun", "branching shrub"),
+        "Curry Leaf": ("characteristic curry-leaf aroma", "Full sun", "culinary shrub"),
+        "Lemon": ("simple glossy", "6–8 hours", "citrus shrub/tree"),
+        "ZZ Plant": ("underground rhizomes", "dry almost completely", "calcium oxalate"),
+        "Prayer Plant": ("red-pink veins", "lightly and evenly moist", "Calathea orbifolia"),
+        "Aglaonema": ("silver, pale green or pink", "top 2–3 cm", "calcium oxalate"),
+        "Spinach": ("cool-season annual", "consistently moist", "bolting"),
+        "Mango": ("alternate, simple, long narrow", "full sun", "single blades"),
+    }
+    for name, phrases in checks.items():
+        p = records[name]
+        combined = " ".join(str(p.get(k, "")) for k in ("identification", "leaf", "growth", "light", "water", "toxicity", "pet_safety", "similar")).casefold()
+        for phrase in phrases:
+            assert phrase.casefold() in combined, (name, phrase)
+
+def test_diagnostic_prompt_branches_cover_previously_misidentified_species():
+    source = Path(__file__).resolve().parents[1].joinpath("app.py").read_text(encoding="utf-8")
+    expected = {
+        "Snake Plant": ("rigid thick upright sword-shaped leaves", "transverse banding"),
+        "Dracaena Marginata": ("narrow linear pointed leaves", "red or burgundy margins"),
+        "Prayer Plant": ("red veins radiating from the midrib", "not Calathea orbifolia"),
+        "Aglaonema": ("silver or pale green patterned centres", "distinguish from Dieffenbachia"),
+        "Curry Leaf": ("many small separate glossy pointed leaflets", "central rachis"),
+        "Lemon": ("simple glossy oval citrus leaves", "not compound pinnate leaves"),
+        "Mango": ("simple entire-edged elongated leaves", "not pinnate neem leaflets"),
+        "Spinach": ("low basal rosette", "no deeply lobed papaya leaves"),
+    }
+    for species, phrases in expected.items():
+        assert f'common == "{species}"' in source or f'"{species}":' in source
+        for phrase in phrases:
+            assert phrase.casefold() in source.casefold(), (species, phrase)
