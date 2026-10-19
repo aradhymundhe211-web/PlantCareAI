@@ -1,38 +1,45 @@
-PLANTCARE AI — audited repair build
-Created by Aradhy Mundhe
+PLANTCARE AI — current repository notes
 
 WHAT THIS BUILD DOES
 - Includes 56 plant profiles in plant_data.json.
-- Supports camera capture and gallery image upload through the same analysis path.
-- Uses BioCLIP 2 with an original BioCLIP fallback for zero-shot image/text ranking against the 56 profile classes.
-- Applies non-plant safeguards where the relevant local model weights are available.
-- If the vision model is unavailable, it does not guess a species from image colour or manually selected clues.
-- Includes a visible-colour screening panel and a guided symptom-and-condition assessment. These are cautious screening aids, not a disease diagnosis.
-- Adds a chat-style local Copilot that retrieves plant-care facts from the bundled profiles and uses simple rules for common symptom questions. It does not require a paid AI inference API.
-- Includes the plant library, search, My Plants, reminders and session-scoped journal.
+- Supports camera capture and gallery upload through the same image-analysis pipeline.
+- Uses the original BioCLIP model (hf-hub:imageomics/bioclip) with prompt-based, multi-view ranking across the 56 supported profiles. This is zero-shot similarity ranking, not a custom-trained 56-class classifier.
+- Applies conservative plant-presence and document-like-image checks. These checks reduce some false results but can still make mistakes.
+- If the vision model cannot load, the app reports identification unavailable instead of inventing a species.
+- Includes approximate visible-colour screening and a guided symptom assessment. These are screening aids, not a trained disease detector or confirmed diagnosis.
+- Includes a local, profile-grounded, rule-based Plant Health Copilot. It does not use a general-purpose language model or a paid inference API.
+- Includes Plant Library, Search, My Plants, reminders, and a session-scoped journal.
+
+CURRENT VALIDATION — 2026-10-19
+- Latest GitHub Actions run passed Python compilation and the automated test suite.
+- The latest held-out real-photo benchmark evaluated 552 images across all 56 classes (Calathea Orbifolia had only 2 usable images; other classes had 10 each).
+- Benchmark top-1 accuracy: 81.2%; top-3 accuracy: 90.9%.
+- Weak classes in this sample include Snake Plant (10% top-1), Spinach (20%), ZZ Plant (30%), Dracaena Marginata (30%), Aglaonema (30%), Lemon (30%), and Mango (40%).
+- These results are preliminary and do not certify performance on arbitrary user photos. The benchmark tests species ranking, not the complete deployed UI or plant/non-plant rejection.
+- The live Streamlit app could not be exercised by the available browser inspection in this audit. The previously reported live false rejection of Marigold and Tulsi has not been confirmed fixed by a new live test.
+- My Plants, reminders, and journal entries are session-scoped and are not guaranteed to persist after a refresh or app restart.
 
 IMPORTANT ACCURACY BOUNDARY
-Having 56 profiles does not mean the model has been trained or validated to identify all 56 accurately. The image model uses zero-shot similarity, not a custom-trained classifier. The displayed category is a relative ranking signal, not a calibrated probability. No labelled held-out dataset for the 56 species was supplied, so species accuracy is not certified. The health panel is based on colour patterns; it cannot confirm disease, detect pests reliably, or measure soil/root/nutrient conditions. The Copilot is profile-grounded and rule-based, not a general language model.
+Do not claim 100% accuracy. A library of 56 profiles does not mean the model has been trained or validated to identify every plant correctly. The displayed result is a relative match, not a calibrated probability. The health panel analyses rough colour patterns; it cannot confirm disease, reliably detect pests, or measure soil moisture, root health, nutrients, or exact sunlight exposure.
 
-NO PAID AI API
-The identification and Copilot features do not call a paid AI inference API. Model weights are downloaded from the model host at runtime, so first startup requires network access and enough disk/RAM. Public reference photos may be retrieved from iNaturalist/Wikipedia. This is not fully offline and does not promise offline startup.
-
-DEPLOY TO STREAMLIT COMMUNITY CLOUD
-1. Extract this ZIP.
-2. Upload the CONTENTS of PlantCareAI-main to the root of your GitHub repository, not the outer folder itself. Preserve .streamlit/config.toml.
-3. Commit and push the changes.
-4. In Streamlit Community Cloud, open the app and wait for the build to finish.
-5. Inspect Manage app > Logs if the app fails. Model weight downloads can be large and may exceed free hosting memory/storage or startup limits.
-6. Test clear plant photos, the same photo from camera and gallery, a car photo, a non-supported plant, and a blurry image. If the model does not load, the app should report identification unavailable instead of guessing.
+DEPENDENCIES
+requirements.txt pins Streamlit, Pillow, NumPy, PyTorch, torchvision, open_clip_torch, and requests. Model weights are downloaded from the model host at runtime, so first startup requires network access and enough memory/storage. The app is not guaranteed to work offline.
 
 RUN LOCALLY
-Use Python 3.11.11 (see .python-version), install requirements, then run:
+Use the Python version specified by .python-version, then run:
   python -m pip install -r requirements.txt
   streamlit run app.py
 
-TESTS
-Run from the project root:
-  python -m py_compile app.py plantcare_core.py test_plantcare_core.py
-  python -m unittest discover -s . -v
+RUN TESTS
+From the project root:
+  python -m py_compile app.py plantcare_core.py benchmark_56.py
+  python -m pytest -q
 
-The lightweight tests validate profile structure and rule-based Copilot behaviour. They do not test live model inference or certify image accuracy.
+DEPLOYMENT CHECKLIST
+1. Wait for Streamlit Community Cloud to finish deploying the latest main commit.
+2. Inspect Manage app > Logs for dependency, model-download, memory, or startup errors.
+3. Open all seven pages and exercise the controls.
+4. Test clear plant photos, the same photo via gallery and camera, a car photo, a dashboard screenshot, an unrelated object, and a blurry/dark photo.
+5. Specifically retest the real Marigold and Tulsi photos previously reported as falsely rejected.
+6. Test Copilot, Library search/category/sorting, Search suggestions/quick views, and My Plants reminder create/complete/delete actions.
+7. Verify the live deployment separately; passing unit tests does not prove end-to-end website behavior.
