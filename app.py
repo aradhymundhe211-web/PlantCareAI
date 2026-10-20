@@ -23,10 +23,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]{border-color:#dce5f0;border-radi
 </style>
 """,unsafe_allow_html=True)
 
-cookies = None
-
 def check_access():
-    global cookies
     cfg = st.secrets.get("access", {})
     expected = str(cfg.get("password", ""))
     allowed = list(cfg.get("device_keys", []))
@@ -35,22 +32,12 @@ def check_access():
         st.error("Access protection is not configured. Add your password and approved device key in your hosting provider's Secrets settings before use.")
         st.info("For security, this screen never displays saved passwords or device keys. Keep both values private and never add them to GitHub.")
         st.stop()
-    cookies = EncryptedCookieManager(prefix="mission100/", password=expected)
-    if not cookies.ready():
-        st.info("Preparing your secure sign-in session…")
-        st.stop()
-    token = hashlib.sha256(("mission100:" + expected + ":" + "|".join(str(k) for k in allowed)).encode()).hexdigest()
-    if cookies.get("remembered_access") == token:
-        st.session_state.authenticated = True
-        st.session_state.device_fingerprint = hashlib.sha256(str(allowed[0]).encode()).hexdigest()
     if not st.session_state.get("authenticated"):
         st.title("🎯 MISSION 100")
         st.subheader("Private Study Command Centre")
-        st.caption("Sign in once on this browser. Your encrypted browser cookie remembers this browser until you sign out or clear cookies.")
         with st.form("login"):
             password = st.text_input("Private password", type="password")
             device_key = st.text_input("Approved device key", type="password")
-            remember = st.checkbox("Remember this browser", value=True)
             submitted = st.form_submit_button("Unlock Mission 100", type="primary")
         if submitted:
             okp = hashlib.sha256(password.encode()).digest() == hashlib.sha256(expected.encode()).digest()
@@ -58,13 +45,10 @@ def check_access():
             if okp and okd:
                 st.session_state.authenticated = True
                 st.session_state.device_fingerprint = hashlib.sha256(device_key.encode()).hexdigest()
-                if remember:
-                    cookies["remembered_access"] = token
-                    cookies.save()
                 st.rerun()
             else:
                 st.error("Access denied. Check the password and approved device key.")
-        st.caption("Remember-device access is browser-specific, not a unique hardware lock. Anyone with both credentials could still sign in elsewhere.")
+        st.caption("This session-based login may ask you to sign in again after a browser reload or a new session.")
         st.stop()
     fingerprint = st.session_state.get("device_fingerprint", "")
     if not any(hashlib.sha256(str(k).encode()).hexdigest() == fingerprint for k in allowed):
@@ -140,12 +124,7 @@ goals = [
 ]
 st.sidebar.title("MISSION 100")
 st.sidebar.caption("Class X · Study Command Centre")
-if st.sidebar.button("Sign out / forget this browser"):
-    try:
-        cookies["remembered_access"] = ""
-        cookies.save()
-    except Exception:
-        pass
+if st.sidebar.button("Lock this session"):
     st.session_state.clear(); st.rerun()
 st.sidebar.markdown("**Rule:** study first, reward second.")
 st.markdown('<div class="mission-hero"><p class="small-tagline">MISSION 100 · PERSONAL STUDY COMMAND CENTRE</p><h2>YOUR FUTURE IS BUILT TODAY.</h2><h2 style="color:#f4d58d">100% IS THE GOAL.</h2><p>Stay focused. Stay disciplined. Work hard. Make every day count.</p></div>', unsafe_allow_html=True)
