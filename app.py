@@ -6,7 +6,7 @@ st.set_page_config(page_title="MISSION 100", page_icon="🎯", layout="wide")
 st.markdown("""
 <style>
 .stApp{background:#f3f6fb;color:#13233f;font-size:18px}.block-container{max-width:1500px;padding-top:1.3rem;padding-bottom:3rem}
-html,body,[class*="css"]{font-size:18px} p,li,label,.stMarkdown{font-size:18px;line-height:1.55} h1{font-size:2.45rem!important;font-weight:850!important} h2{font-size:1.85rem!important;font-weight:800!important} h3{font-size:1.4rem!important;font-weight:800!important} [data-testid="stSidebar"]{background:#eaf0f8;border-right:1px solid #d9e2ef} [data-testid="stSidebar"] *{font-size:17px;font-weight:600}
+html,body,[class*="css"]{font-size:18px} p,li,label,.stMarkdown{font-size:18px;line-height:1.55} h1{font-size:2.45rem!important;font-weight:850!important} h2{font-size:1.85rem!important;font-weight:800!important} h3{font-size:1.4rem!important;font-weight:800!important} [data-testid="stSidebar"]{background:linear-gradient(180deg,#e6eef9 0%,#f5f8fd 100%);border-right:1px solid #cfdaeb;min-width:300px!important} [data-testid="stSidebar"] *{font-size:19px;font-weight:700} [data-testid="stSidebar"] [data-testid="stRadio"] label{padding:11px 13px!important;border:1px solid #d3deed;border-radius:10px!important;background:#fff;margin:5px 0;min-height:48px;box-shadow:0 2px 5px #152e4a0a} [data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked){background:#174ea6!important;color:#fff!important;border-color:#174ea6;box-shadow:0 4px 12px #174ea633} [data-testid="stSidebar"] [data-testid="stRadio"] [data-testid="stWidgetLabel"]{font-size:18px!important;font-weight:850!important} [data-testid="stSidebar"] [data-testid="stRadio"] div[role="radiogroup"]>label>div:first-child{display:none!important}
 .stTabs [data-baseweb="tab-list"]{gap:7px;background:#e8eef7;padding:8px;border-radius:14px;flex-wrap:wrap}
 .stTabs [data-baseweb="tab"]{height:auto;border-radius:9px;padding:10px 13px;color:#314563;font-weight:650}
 .stTabs [aria-selected="true"]{background:#174ea6!important;color:white!important}
@@ -139,7 +139,7 @@ c3.metric("Syllabus first-pass",str(round(covered*100/total_chapters))+"%"); c4.
 pages = ["Today's Mission","AP Mastery","Syllabus","Life Goals","Focus Room","My Dreams","Mistake Book","Daily Discipline","Progress & Backup"]
 page = st.sidebar.radio("NAVIGATION", pages, index=0, label_visibility="visible")
 st.sidebar.markdown("---")
-st.sidebar.markdown("**STAY FOCUSED.**  \\n**WORK HARD.**  \\n**100% IS THE GOAL.**")
+st.sidebar.markdown("### STAY FOCUSED.\n\n### WORK HARD.\n\n### 100% IS THE GOAL.")
 if page == "Today's Mission":
     st.info("Priority from your HTML: Marathi CM preparation, Arithmetic Progressions, Nationalism in India, Chemical Reactions and Equations, and protected sleep. Adjust tasks to match your actual school timetable.")
     left,right = st.columns([1.2,0.8])
@@ -214,20 +214,13 @@ if page == "Syllabus":
 if page == "Life Goals":
     st.header("Long-term goals")
     st.write("Keep these visible, but do not let distant rewards replace today's schoolwork. Build the foundation first.")
-    goal_images = {
-        "G1": "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=1200&q=85",
-        "G2": "https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?auto=format&fit=crop&w=1200&q=85",
-        "G3": "https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?auto=format&fit=crop&w=1200&q=85",
-        "G4": "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1200&q=85",
-        "G5": "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=85",
-        "G6": "https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?auto=format&fit=crop&w=1200&q=85",
-        "G7": "https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=1200&q=85"
-    }
+    # Avoid unrelated stock photos. Use clean, labeled goal cards until the user supplies the exact personal inspiration images.
+    goal_icons = {"G1":"🎯","G2":"🚙","G3":"🚘","G4":"🏎️","G5":"🏋️","G6":"🎥","G7":"💪"}
     for gid,title,detail in goals:
         with st.container(border=True):
             left,right=st.columns([1,2],gap="large")
             with left:
-                st.image(goal_images.get(gid, goal_images["G1"]), use_container_width=True)
+                st.markdown(f'<div style="min-height:150px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#e8effa,#d5e3f7);border:1px solid #cbd9ec;border-radius:14px;font-size:64px;font-weight:800">{goal_icons.get(gid,"🎯")}</div>',unsafe_allow_html=True)
             with right:
                 st.subheader(title)
                 st.write(detail)
