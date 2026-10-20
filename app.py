@@ -23,6 +23,10 @@ div[data-testid="stVerticalBlockBorderWrapper"]{border-color:#dce5f0;border-radi
 """,unsafe_allow_html=True)
 
 def check_access():
+    import base64, hmac
+    from datetime import datetime, timedelta, timezone
+    import extra_streamlit_components as stx
+
     cfg = st.secrets.get("access", {})
     expected = str(cfg.get("password", ""))
     allowed = list(cfg.get("device_keys", []))
@@ -31,24 +35,64 @@ def check_access():
         st.error("Access protection is not configured. Add your password and approved device key in your hosting provider's Secrets settings before use.")
         st.info("For security, this screen never displays saved passwords or device keys. Keep both values private and never add them to GitHub.")
         st.stop()
+
+    # A signed, expiring cookie remembers this browser after reloads.
+    # The cookie contains no password or device key.
+    signing_key = str(cfg.get("cookie_signing_key", expected + "|" + "|".join(str(k) for k in allowed))).encode()
+    cookie_manager = stx.CookieManager(key="mission100_cookie_manager")
+    cookie_name = "mission100_login"
+    cookie_token = cookie_manager.get(cookie=cookie_name)
+
+    def make_token(device_fingerprint, expires):
+        payload = f"{device_fingerprint}:{expires}"
+        signature = hmac.new(signing_key, payload.encode(), hashlib.sha256).hexdigest()
+        return base64.urlsafe_b64encode(f"{payload}:{signature}".encode()).decode()
+
+    def verify_token(token):
+        try:
+            decoded = base64.urlsafe_b64decode(token.encode()).decode()
+            fingerprint, expires_text, signature = decoded.rsplit(":", 2)
+            payload = f"{fingerprint}:{expires_text}"
+            expected_sig = hmac.new(signing_key, payload.encode(), hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(signature, expected_sig):
+                return None
+            if int(expires_text) <= int(time.time()):
+                return None
+            if not any(hashlib.sha256(str(k).encode()).hexdigest() == fingerprint for k in allowed):
+                return None
+            return fingerprint
+        except Exception:
+            return None
+
     if not st.session_state.get("authenticated"):
-        st.title("🎯 MISSION 100")
-        st.subheader("Private Study Command Centre")
-        with st.form("login"):
-            password = st.text_input("Private password", type="password")
-            device_key = st.text_input("Approved device key", type="password")
-            submitted = st.form_submit_button("Unlock Mission 100", type="primary")
-        if submitted:
-            okp = hashlib.sha256(password.encode()).digest() == hashlib.sha256(expected.encode()).digest()
-            okd = any(hashlib.sha256(device_key.encode()).digest() == hashlib.sha256(str(k).encode()).digest() for k in allowed)
-            if okp and okd:
-                st.session_state.authenticated = True
-                st.session_state.device_fingerprint = hashlib.sha256(device_key.encode()).hexdigest()
-                st.rerun()
-            else:
-                st.error("Access denied. Check the password and approved device key.")
-        st.caption("This session-based login may ask you to sign in again after a browser reload or a new session.")
-        st.stop()
+        fingerprint = verify_token(cookie_token) if cookie_token else None
+        if fingerprint:
+            st.session_state.authenticated = True
+            st.session_state.device_fingerprint = fingerprint
+        else:
+            st.title("🎯 MISSION 100")
+            st.subheader("Private Study Command Centre")
+            with st.form("login"):
+                password = st.text_input("Private password", type="password")
+                device_key = st.text_input("Approved device key", type="password")
+                remember = st.checkbox("Remember this browser for 14 days", value=True)
+                submitted = st.form_submit_button("Unlock Mission 100", type="primary")
+            if submitted:
+                okp = hmac.compare_digest(hashlib.sha256(password.encode()).digest(), hashlib.sha256(expected.encode()).digest())
+                okd = any(hmac.compare_digest(hashlib.sha256(device_key.encode()).digest(), hashlib.sha256(str(k).encode()).digest()) for k in allowed)
+                if okp and okd:
+                    fingerprint = hashlib.sha256(device_key.encode()).hexdigest()
+                    st.session_state.authenticated = True
+                    st.session_state.device_fingerprint = fingerprint
+                    if remember:
+                        expires = int((datetime.now(timezone.utc) + timedelta(days=14)).timestamp())
+                        cookie_manager.set(cookie=cookie_name, val=make_token(fingerprint, expires), expires_at=datetime.now(timezone.utc) + timedelta(days=14), key="mission100_set_login_cookie")
+                    st.rerun()
+                else:
+                    st.error("Access denied. Check the password and approved device key.")
+            st.caption("Choose “Remember this browser” to stay signed in across reloads for up to 14 days. Locking the session clears the current session; use browser cookie settings to revoke a remembered login.")
+            st.stop()
+
     fingerprint = st.session_state.get("device_fingerprint", "")
     if not any(hashlib.sha256(str(k).encode()).hexdigest() == fingerprint for k in allowed):
         st.session_state.clear()
