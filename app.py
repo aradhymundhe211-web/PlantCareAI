@@ -57,6 +57,14 @@ def check_access():
     cookie_token = browser_cookies.get(cookie_name)
     if cookie_token is None:
         cookie_token = cookie_manager.get(cookie=cookie_name)
+    # An empty dictionary can also mean the browser component has not finished
+    # reading cookies yet. Give it one additional render before showing login.
+    if not cookie_token and not st.session_state.get("_mission100_cookie_missing_waited"):
+        st.session_state["_mission100_cookie_missing_waited"] = True
+        st.info("Checking this browser for your saved login…")
+        time.sleep(1)
+        st.rerun()
+    st.session_state.pop("_mission100_cookie_missing_waited", None)
 
     def make_token(device_fingerprint, expires):
         payload = f"{device_fingerprint}:{expires}"
@@ -276,7 +284,10 @@ if page == "Life Goals":
     st.write("Keep these visible, but do not let distant rewards replace today's schoolwork. Build the foundation first.")
     # Avoid unrelated stock photos. Use clean, labeled goal cards until the user supplies the exact personal inspiration images.
     goal_icons = {"G1":"💯","G2":"🚘","G3":"🏎️","G4":"🏋️","G5":"🏆","G6":"💪"}
-    for gid,title,detail in goals:
+    goal_overrides = d.get("goal_customizations", {})
+    hidden_goal_ids = set(d.get("deleted_goals", []))
+    visible_goals = [(gid, goal_overrides.get(gid, {}).get("title", title), goal_overrides.get(gid, {}).get("detail", detail)) for gid,title,detail in goals if gid not in hidden_goal_ids]
+    for gid,title,detail in visible_goals:
         with st.container(border=True):
             left,right=st.columns([1,2],gap="large")
             with left:
@@ -286,6 +297,41 @@ if page == "Life Goals":
                 st.write(detail)
                 done=st.checkbox("Milestone achieved",value=bool(d["goals"].get(gid)),key="goal_"+gid)
                 if done != bool(d["goals"].get(gid)): d["goals"][gid]=done; save()
+    st.subheader("Manage your life goals")
+    st.caption("Edit or remove a goal whenever your priorities change. Changes are saved with your Mission 100 progress.")
+    for gid,title,detail in list(goals):
+        with st.expander("Edit: " + title):
+            edited_title = st.text_input("Goal title", value=title, key="edit_title_"+gid)
+            edited_detail = st.text_area("Why this goal matters / next steps", value=detail, key="edit_detail_"+gid)
+            ec1, ec2 = st.columns(2)
+            if ec1.button("Save changes", key="save_goal_"+gid, type="primary"):
+                goals = [(g, edited_title.strip() if g == gid and edited_title.strip() else t, edited_detail.strip() if g == gid else desc) for g,t,desc in goals]
+                d.setdefault("goal_customizations", {})[gid] = {"title": edited_title.strip(), "detail": edited_detail.strip()}
+                save(); st.rerun()
+            if ec2.button("Delete goal", key="delete_goal_"+gid):
+                d["deleted_goals"] = list(set(d.get("deleted_goals", []) + [gid]))
+                save(); st.rerun()
+    with st.form("add_life_goal_form", clear_on_submit=True):
+        st.subheader("Add a new life goal")
+        new_goal_title = st.text_input("Goal")
+        new_goal_detail = st.text_area("Reason / next steps")
+        if st.form_submit_button("Add life goal") and new_goal_title.strip():
+            d.setdefault("custom_goals", []).append({"id":"UG_"+str(int(time.time()*1000)), "title":new_goal_title.strip(), "detail":new_goal_detail.strip()})
+            save(); st.rerun()
+    for ug in d.get("custom_goals", []):
+        with st.container(border=True):
+            st.subheader(ug.get("title","Untitled goal"))
+            st.write(ug.get("detail",""))
+            changed_title = st.text_input("Edit goal", value=ug.get("title",""), key="custom_goal_title_"+ug["id"])
+            changed_detail = st.text_area("Edit details", value=ug.get("detail",""), key="custom_goal_detail_"+ug["id"])
+            cc1, cc2 = st.columns(2)
+            if cc1.button("Save goal", key="save_custom_goal_"+ug["id"]):
+                ug["title"] = changed_title.strip() or ug["title"]
+                ug["detail"] = changed_detail.strip()
+                save(); st.rerun()
+            if cc2.button("Delete goal", key="delete_custom_goal_"+ug["id"]):
+                d["custom_goals"] = [x for x in d["custom_goals"] if x.get("id") != ug["id"]]
+                save(); st.rerun()
     st.subheader("Daily identity")
     st.markdown("- I start before I feel motivated.\n- I practise Maths every day.\n- I correct mistakes instead of hiding them.\n- I protect sleep and use my phone intentionally.\n- I measure honest work, not just hours.")
     review=st.text_area("Weekly review: what worked, what distracted me, what will I change?",value=d.get("notes",""),height=120)
