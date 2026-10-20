@@ -114,12 +114,11 @@ syllabus = {
 }
 goals = [
 ("G1","Score 100% in Class 10 board examinations","Chapter mastery, timed papers, error correction and spaced revision."),
-("G2","Buy a Toyota Fortuner","Long-term financial goal; build skills, career and responsible money habits."),
-("G3","Buy a Toyota Fortuner Legender","Long-term milestone after education and financial stability."),
-("G4","Own a Porsche 911 GT3 RS","Aspirational goal; focus first on education and career foundations."),
-("G5","Build one of India’s biggest fitness gym businesses","Learn coaching, business operations, customer safety and leadership."),
-("G6","Become a leading fitness influencer in India","Create useful, honest fitness education and build communication skills."),
-("G7","Earn a MuscleBlaze sponsorship","Build credibility, knowledge, consistency and an audience before pursuing partnerships.")
+("G2","Buy a Toyota Fortuner Legender","Long-term milestone after education and financial stability."),
+("G3","Own a Porsche 911 GT3 RS","Aspirational goal; focus first on education and career foundations."),
+("G4","Build one of India’s biggest fitness gym businesses","Learn coaching, business operations, customer safety and leadership."),
+("G5","Become a leading fitness influencer in India","Create useful, honest fitness education and build communication skills."),
+("G6","Earn a MuscleBlaze sponsorship","Build credibility, knowledge, consistency and an audience before pursuing partnerships.")
 ]
 st.sidebar.title("MISSION 100")
 st.sidebar.caption("Class X · Study Command Centre")
@@ -215,7 +214,7 @@ if page == "Life Goals":
     st.header("Long-term goals")
     st.write("Keep these visible, but do not let distant rewards replace today's schoolwork. Build the foundation first.")
     # Avoid unrelated stock photos. Use clean, labeled goal cards until the user supplies the exact personal inspiration images.
-    goal_icons = {"G1":"🎯","G2":"🚙","G3":"🚘","G4":"🏎️","G5":"🏋️","G6":"🎥","G7":"💪"}
+    goal_icons = {"G1":"💯","G2":"🚘","G3":"🏎️","G4":"🏋️","G5":"🏆","G6":"💪"}
     for gid,title,detail in goals:
         with st.container(border=True):
             left,right=st.columns([1,2],gap="large")
