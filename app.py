@@ -46,25 +46,23 @@ def check_access():
     # response before showing the login form, otherwise a valid cookie can
     # briefly look like a missing cookie on a page reload.
     browser_cookies = cookie_manager.get_all()
+    cookie_attempt = int(st.session_state.get("_mission100_cookie_read_attempt", 0))
     if not isinstance(browser_cookies, dict):
-        if not st.session_state.get("_mission100_cookie_ready_waited"):
-            st.session_state["_mission100_cookie_ready_waited"] = True
-            st.info("Restoring your remembered login…")
-            time.sleep(1)
-            st.rerun()
         browser_cookies = {}
-    st.session_state.pop("_mission100_cookie_ready_waited", None)
     cookie_token = browser_cookies.get(cookie_name)
-    if cookie_token is None:
-        cookie_token = cookie_manager.get(cookie=cookie_name)
-    # An empty dictionary can also mean the browser component has not finished
-    # reading cookies yet. Give it one additional render before showing login.
-    if not cookie_token and not st.session_state.get("_mission100_cookie_missing_waited"):
-        st.session_state["_mission100_cookie_missing_waited"] = True
-        st.info("Checking this browser for your saved login…")
+    if not cookie_token:
+        try:
+            cookie_token = cookie_manager.get(cookie=cookie_name)
+        except Exception:
+            cookie_token = None
+    # CookieManager may need several browser/component round-trips after a
+    # hard reload. Do not prematurely show the password form while it initializes.
+    if not cookie_token and cookie_attempt < 5:
+        st.session_state["_mission100_cookie_read_attempt"] = cookie_attempt + 1
+        st.info("Restoring your remembered login…")
         time.sleep(1)
         st.rerun()
-    st.session_state.pop("_mission100_cookie_missing_waited", None)
+    st.session_state.pop("_mission100_cookie_read_attempt", None)
 
     def make_token(device_fingerprint, expires):
         payload = f"{device_fingerprint}:{expires}"
@@ -213,10 +211,33 @@ if page == "Today's Mission":
     left,right = st.columns([1.2,0.8])
     with left:
         st.header("Today's task board")
-        for key,subject,title,detail in tasks:
+        task_overrides = d.setdefault("task_customizations", {})
+        deleted_task_ids = set(d.get("deleted_tasks", []))
+        for key,subject,base_title,base_detail in tasks:
+            if key in deleted_task_ids:
+                continue
+            task_cfg = task_overrides.get(key, {})
+            title = task_cfg.get("title", base_title)
+            detail = task_cfg.get("detail", base_detail)
+            subject = task_cfg.get("subject", subject)
             v=st.checkbox(subject+" — "+title,value=bool(d["done"].get(key)),key="task_"+key,help=detail)
             if v != bool(d["done"].get(key)): mark_task(key,v)
             st.caption(detail)
+            with st.expander("Edit or remove this task", expanded=False):
+                edit_title = st.text_input("Task name", value=title, key="builtin_task_title_"+key)
+                edit_subject = st.selectbox("Subject", ["Maths","Science","SST","English","Marathi","Hindi","Sanskrit","AI","Routine"], index=["Maths","Science","SST","English","Marathi","Hindi","Sanskrit","AI","Routine"].index(subject) if subject in ["Maths","Science","SST","English","Marathi","Hindi","Sanskrit","AI","Routine"] else 0, key="builtin_task_subject_"+key)
+                edit_detail = st.text_area("Task instructions", value=detail, key="builtin_task_detail_"+key)
+                save_col, delete_col, restore_col = st.columns(3)
+                if save_col.button("Save task", key="save_builtin_task_"+key):
+                    d.setdefault("task_customizations", {})[key] = {"title": edit_title.strip() or title, "subject": edit_subject, "detail": edit_detail.strip()}
+                    save(); st.rerun()
+                if delete_col.button("Delete task", key="delete_builtin_task_"+key):
+                    d["deleted_tasks"] = list(set(d.get("deleted_tasks", []) + [key]))
+                    save(); st.rerun()
+                if restore_col.button("Reset task", key="reset_builtin_task_"+key):
+                    d.setdefault("task_customizations", {}).pop(key, None)
+                    d["deleted_tasks"] = [x for x in d.get("deleted_tasks", []) if x != key]
+                    save(); st.rerun()
         with st.form("custom_task_form"):
             st.subheader("Add a custom task")
             subj=st.selectbox("Subject",["Maths","Science","SST","English","Marathi","Hindi","Sanskrit","AI","Routine"])
