@@ -224,9 +224,24 @@ if page == "Today's Mission":
             if st.form_submit_button("Add task") and title.strip():
                 d["custom"].append({"id":"custom_"+str(int(time.time()*1000)),"subject":subj,"title":title.strip(),"detail":"Custom task — mark complete only after finishing."})
                 save(); st.rerun()
-        for t in d.get("custom",[]):
-            v=st.checkbox(t["subject"]+" — "+t["title"],value=bool(d["done"].get(t["id"])),key="task_"+t["id"])
-            if v != bool(d["done"].get(t["id"])): mark_task(t["id"],v)
+        for t in list(d.get("custom",[])):
+            with st.container(border=True):
+                v=st.checkbox(t["subject"]+" — "+t["title"],value=bool(d["done"].get(t["id"])),key="task_"+t["id"])
+                if v != bool(d["done"].get(t["id"])): mark_task(t["id"],v)
+                edit_col, delete_col = st.columns(2)
+                with edit_col:
+                    with st.expander("Edit task"):
+                        edited_task_title = st.text_input("Task name", value=t["title"], key="edit_task_title_"+t["id"])
+                        edited_task_subject = st.selectbox("Subject", ["Maths","Science","SST","English","Marathi","Hindi","Sanskrit","AI","Routine"], index=["Maths","Science","SST","English","Marathi","Hindi","Sanskrit","AI","Routine"].index(t.get("subject","Maths")) if t.get("subject","Maths") in ["Maths","Science","SST","English","Marathi","Hindi","Sanskrit","AI","Routine"] else 0, key="edit_task_subject_"+t["id"])
+                        if st.button("Save task changes", key="save_task_"+t["id"]):
+                            t["title"] = edited_task_title.strip() or t["title"]
+                            t["subject"] = edited_task_subject
+                            save(); st.rerun()
+                with delete_col:
+                    if st.button("Delete task", key="delete_task_"+t["id"]):
+                        d["custom"] = [x for x in d["custom"] if x.get("id") != t["id"]]
+                        d["done"].pop(t["id"], None)
+                        save(); st.rerun()
     with right:
         st.header("Term 1 exam timetable")
         st.caption("Transcribed from supplied HTML. “P. L.” is preserved as printed; its meaning is not guessed.")
@@ -284,6 +299,11 @@ if page == "Life Goals":
     st.write("Keep these visible, but do not let distant rewards replace today's schoolwork. Build the foundation first.")
     # Avoid unrelated stock photos. Use clean, labeled goal cards until the user supplies the exact personal inspiration images.
     goal_icons = {"G1":"💯","G2":"🚘","G3":"🏎️","G4":"🏋️","G5":"🏆","G6":"💪"}
+    goal_images = {
+        "G2": "https://cdn.pika.art/v2/creation/uploads/5f285cba-1d8d-4fe6-8e1a-3845cd7a99f4/8149de2715a64bc3bac18311eafd1b89.jpg",
+        "G3": "https://cdn.pika.art/v2/creation/uploads/5f285cba-1d8d-4fe6-8e1a-3845cd7a99f4/91aaab982f774d4b8aeaa3bbc946f092.jpg",
+        "G6": "https://cdn.pika.art/v2/creation/uploads/5f285cba-1d8d-4fe6-8e1a-3845cd7a99f4/ac69e669c24f458aa2ebc29562d493db.png"
+    }
     goal_overrides = d.get("goal_customizations", {})
     hidden_goal_ids = set(d.get("deleted_goals", []))
     visible_goals = [(gid, goal_overrides.get(gid, {}).get("title", title), goal_overrides.get(gid, {}).get("detail", detail)) for gid,title,detail in goals if gid not in hidden_goal_ids]
@@ -291,7 +311,10 @@ if page == "Life Goals":
         with st.container(border=True):
             left,right=st.columns([1,2],gap="large")
             with left:
-                st.markdown(f'<div style="min-height:150px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#e8effa,#d5e3f7);border:1px solid #cbd9ec;border-radius:14px;font-size:64px;font-weight:800">{goal_icons.get(gid,"🎯")}</div>',unsafe_allow_html=True)
+                if gid in goal_images:
+                    st.image(goal_images[gid], use_container_width=True)
+                else:
+                    st.markdown(f'<div style="min-height:150px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#e8effa,#d5e3f7);border:1px solid #cbd9ec;border-radius:14px;font-size:64px;font-weight:800">{goal_icons.get(gid,"🎯")}</div>',unsafe_allow_html=True)
             with right:
                 st.subheader(title)
                 st.write(detail)
