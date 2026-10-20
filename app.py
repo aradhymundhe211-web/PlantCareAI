@@ -41,7 +41,22 @@ def check_access():
     signing_key = str(cfg.get("cookie_signing_key", expected + "|" + "|".join(str(k) for k in allowed))).encode()
     cookie_manager = stx.CookieManager(key="mission100_cookie_manager")
     cookie_name = "mission100_login"
-    cookie_token = cookie_manager.get(cookie=cookie_name)
+
+    # CookieManager loads browser cookies asynchronously. Wait for its first
+    # response before showing the login form, otherwise a valid cookie can
+    # briefly look like a missing cookie on a page reload.
+    browser_cookies = cookie_manager.get_all()
+    if not isinstance(browser_cookies, dict):
+        if not st.session_state.get("_mission100_cookie_ready_waited"):
+            st.session_state["_mission100_cookie_ready_waited"] = True
+            st.info("Restoring your remembered login…")
+            time.sleep(1)
+            st.rerun()
+        browser_cookies = {}
+    st.session_state.pop("_mission100_cookie_ready_waited", None)
+    cookie_token = browser_cookies.get(cookie_name)
+    if cookie_token is None:
+        cookie_token = cookie_manager.get(cookie=cookie_name)
 
     def make_token(device_fingerprint, expires):
         payload = f"{device_fingerprint}:{expires}"
@@ -87,6 +102,8 @@ def check_access():
                     if remember:
                         expires = int((datetime.now(timezone.utc) + timedelta(days=14)).timestamp())
                         cookie_manager.set(cookie=cookie_name, val=make_token(fingerprint, expires), expires_at=datetime.now(timezone.utc) + timedelta(days=14), key="mission100_set_login_cookie")
+                        # Give the browser component time to persist the cookie before rerunning.
+                        time.sleep(1)
                     st.rerun()
                 else:
                     st.error("Access denied. Check the password and approved device key.")
