@@ -5,8 +5,8 @@ from pathlib import Path
 st.set_page_config(page_title="MISSION 100", page_icon="🎯", layout="wide")
 st.markdown("""
 <style>
-.stApp{background:#f3f6fb;color:#13233f}.block-container{max-width:1500px;padding-top:1.3rem;padding-bottom:3rem}
-h1,h2,h3{color:#102544;letter-spacing:-.02em}[data-testid="stSidebar"]{background:#eaf0f8;border-right:1px solid #d9e2ef}
+.stApp{background:#f3f6fb;color:#13233f;font-size:18px}.block-container{max-width:1500px;padding-top:1.3rem;padding-bottom:3rem}
+html,body,[class*="css"]{font-size:18px} p,li,label,.stMarkdown{font-size:18px;line-height:1.55} h1{font-size:2.45rem!important;font-weight:850!important} h2{font-size:1.85rem!important;font-weight:800!important} h3{font-size:1.4rem!important;font-weight:800!important} [data-testid="stSidebar"]{background:#eaf0f8;border-right:1px solid #d9e2ef} [data-testid="stSidebar"] *{font-size:17px;font-weight:600}
 .stTabs [data-baseweb="tab-list"]{gap:7px;background:#e8eef7;padding:8px;border-radius:14px;flex-wrap:wrap}
 .stTabs [data-baseweb="tab"]{height:auto;border-radius:9px;padding:10px 13px;color:#314563;font-weight:650}
 .stTabs [aria-selected="true"]{background:#174ea6!important;color:white!important}
@@ -136,8 +136,13 @@ covered = sum(bool(d["cover"].get(sub+"_"+str(i))) for sub, arr in syllabus.item
 c1,c2,c3,c4 = st.columns(4)
 c1.metric("Today's tasks",str(completed)+"/"+str(total)); c2.metric("XP earned",str(d.get("xp",0)))
 c3.metric("Syllabus first-pass",str(round(covered*100/total_chapters))+"%"); c4.metric("Focus sessions logged",str(d.get("focus_sessions",0)))
-tab1,tab2,tab3,tab4,tab5,tab6,tab7,tab8,tab9 = st.tabs(["Today's Mission","AP Mastery","Syllabus","Life Goals","Focus Room","My Dreams","Mistake Book","Daily Discipline","Progress & Backup"])
-with tab1:
+pages = ["Today's Mission","AP Mastery","Syllabus","Life Goals","Focus Room","My Dreams","Mistake Book","Daily Discipline","Progress & Backup"]
+page = st.sidebar.radio("NAVIGATION", pages, index=0, label_visibility="visible")
+st.sidebar.markdown("---")
+st.sidebar.markdown("**STAY FOCUSED.**  
+**WORK HARD.**  
+**100% IS THE GOAL.**")
+if page == "Today's Mission":
     st.info("Priority from your HTML: Marathi CM preparation, Arithmetic Progressions, Nationalism in India, Chemical Reactions and Equations, and protected sleep. Adjust tasks to match your actual school timetable.")
     left,right = st.columns([1.2,0.8])
     with left:
@@ -181,7 +186,7 @@ with tab1:
                 st.session_state.timer_end=0; save(); st.rerun()
         st.markdown("**Focus rules**")
         st.write("• Phone outside study space.  \n• One task per session.  \n• Recall or solve without notes.  \n• Take a five-minute break after a 25-minute Pomodoro.")
-with tab2:
+if page == "AP Mastery":
     st.header("Arithmetic Progressions — mastery track")
     st.warning("Repeat questions 2–3 times and advance only after an independent attempt. Verify exercise numbering in your NCERT edition. PYQs must be real papers with year/source recorded; this dashboard does not invent question papers.")
     for key,title,detail in apbase:
@@ -199,7 +204,7 @@ with tab2:
         if v != bool(d["ap"].get(t["id"])): d["ap"][t["id"]]=v; save()
     st.markdown("**Chapter mastery cycle**")
     st.write("Understand concept → NCERT examples/exercises → competency questions → verified chapter-wise PYQs → timed test → mistake analysis → correction → retest and spaced revision.")
-with tab3:
+if page == "Syllabus":
     st.header("Syllabus coverage tracker")
     st.caption("A checked chapter means a first study attempt only—not mastery. Return for recall, written practice, timed testing and mistake correction.")
     for subject,chapters in syllabus.items():
@@ -208,19 +213,33 @@ with tab3:
                 key=subject+"_"+str(i); v=st.checkbox(chapter,value=bool(d["cover"].get(key)),key="cover_"+key)
                 if v != bool(d["cover"].get(key)): d["cover"][key]=v; save()
     st.info("Hindi and Sanskrit chapter names remain placeholders because the source image text was too small to read reliably. Replace them with the exact school syllabus rather than guessing.")
-with tab4:
+if page == "Life Goals":
     st.header("Long-term goals")
     st.write("Keep these visible, but do not let distant rewards replace today's schoolwork. Build the foundation first.")
+    goal_images = {
+        "G1": "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=1200&q=85",
+        "G2": "https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?auto=format&fit=crop&w=1200&q=85",
+        "G3": "https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?auto=format&fit=crop&w=1200&q=85",
+        "G4": "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1200&q=85",
+        "G5": "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=85",
+        "G6": "https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?auto=format&fit=crop&w=1200&q=85",
+        "G7": "https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=1200&q=85"
+    }
     for gid,title,detail in goals:
         with st.container(border=True):
-            done=st.checkbox("Milestone achieved: "+title,value=bool(d["goals"].get(gid)),key="goal_"+gid)
-            if done != bool(d["goals"].get(gid)): d["goals"][gid]=done; save()
-            st.subheader(title); st.write(detail)
+            left,right=st.columns([1,2],gap="large")
+            with left:
+                st.image(goal_images.get(gid, goal_images["G1"]), use_container_width=True)
+            with right:
+                st.subheader(title)
+                st.write(detail)
+                done=st.checkbox("Milestone achieved",value=bool(d["goals"].get(gid)),key="goal_"+gid)
+                if done != bool(d["goals"].get(gid)): d["goals"][gid]=done; save()
     st.subheader("Daily identity")
     st.markdown("- I start before I feel motivated.\n- I practise Maths every day.\n- I correct mistakes instead of hiding them.\n- I protect sleep and use my phone intentionally.\n- I measure honest work, not just hours.")
     review=st.text_area("Weekly review: what worked, what distracted me, what will I change?",value=d.get("notes",""),height=120)
     if review != d.get("notes",""): d["notes"]=review; save()
-with tab5:
+if page == "Focus Room":
     st.header("Focus Room")
     st.caption("Use a focused block, take intentional breaks, and record completed sessions.")
     focus_minutes = st.select_slider("Focus block length", options=[10,25,45,60], value=25, key="focus_room_minutes")
@@ -260,7 +279,7 @@ with tab5:
     st.metric("Completed focus sessions",int(d.get("focus_sessions",0)))
     st.metric("Recorded study minutes",int(d.get("study_minutes",0)))
 
-with tab6:
+if page == "My Dreams":
     st.header("My Dreams")
     st.caption("Keep your long-term ambitions visible; make progress through today's actions.")
     with st.form("dream_form",clear_on_submit=True):
@@ -280,7 +299,7 @@ with tab6:
                 d["dreams"]=[x for x in d["dreams"] if x.get("id")!=dream.get("id")]; save(); st.rerun()
     save()
 
-with tab7:
+if page == "Mistake Book":
     st.header("Mistake Book")
     st.caption("Record the question, the reason for the mistake, the correct method, and a retest date.")
     with st.form("mistake_form",clear_on_submit=True):
@@ -301,7 +320,7 @@ with tab7:
             mistake["fixed"]=st.checkbox("Retested and corrected",value=bool(mistake.get("fixed",False)),key="fixed_"+mistake.get("id",""))
     save()
 
-with tab8:
+if page == "Daily Discipline":
     st.header("Daily Discipline")
     st.caption("Build consistency, not guilt. Tick honestly.")
     items=[("morning","Started with a clear plan"),("maths","Completed daily Maths practice"),("revision","Revised an earlier topic"),("focus","Completed a distraction-free focus block"),("mistakes","Reviewed or corrected a mistake"),("tomorrow","Prepared tomorrow's first task")]
@@ -313,7 +332,7 @@ with tab8:
     if reflection != d.get("notes",""): d["notes"]=reflection; save()
     st.markdown("**STAY FOCUSED. STAY DISCIPLINED. WORK HARD. 100% IS THE GOAL.**")
 
-with tab9:
+if page == "Progress & Backup":
     st.header("Progress and backup")
     st.write("Progress is saved in a local JSON file while the host retains it. Some hosts reset local files during restarts or redeploys, so download backups regularly.")
     st.download_button("Download progress backup",json.dumps(d,ensure_ascii=False,indent=2),file_name="mission100-progress.json",mime="application/json",type="primary")
