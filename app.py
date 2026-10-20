@@ -1,7 +1,6 @@
 import streamlit as st
 import json, time, hashlib
 from pathlib import Path
-from streamlit_cookies_manager import EncryptedCookieManager
 
 st.set_page_config(page_title="MISSION 100", page_icon="🎯", layout="wide")
 st.markdown("""
