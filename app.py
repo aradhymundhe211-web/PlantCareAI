@@ -139,9 +139,7 @@ c3.metric("Syllabus first-pass",str(round(covered*100/total_chapters))+"%"); c4.
 pages = ["Today's Mission","AP Mastery","Syllabus","Life Goals","Focus Room","My Dreams","Mistake Book","Daily Discipline","Progress & Backup"]
 page = st.sidebar.radio("NAVIGATION", pages, index=0, label_visibility="visible")
 st.sidebar.markdown("---")
-st.sidebar.markdown("**STAY FOCUSED.**  
-**WORK HARD.**  
-**100% IS THE GOAL.**")
+st.sidebar.markdown("**STAY FOCUSED.**  \\n**WORK HARD.**  \\n**100% IS THE GOAL.**")
 if page == "Today's Mission":
     st.info("Priority from your HTML: Marathi CM preparation, Arithmetic Progressions, Nationalism in India, Chemical Reactions and Equations, and protected sleep. Adjust tasks to match your actual school timetable.")
     left,right = st.columns([1.2,0.8])
