@@ -23,7 +23,10 @@ div[data-testid="stVerticalBlockBorderWrapper"]{border-color:#dce5f0;border-radi
 </style>
 """,unsafe_allow_html=True)
 
+cookies = None
+
 def check_access():
+    global cookies
     cfg = st.secrets.get("access", {})
     expected = str(cfg.get("password", ""))
     allowed = list(cfg.get("device_keys", []))
