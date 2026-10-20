@@ -10,9 +10,8 @@ def check_access():
     allowed = list(cfg.get("device_keys", []))
     if not expected or not allowed:
         st.title("MISSION 100 — Private setup")
-        st.error("Access protection is not configured. Add password and device_keys in your hosting provider's Secrets settings before use.")
-        st.code('[access]\npassword = "choose-a-long-unique-password"\ndevice_keys = ["unique-key-for-this-device"]')
-        st.warning("Never commit real passwords or device keys to GitHub.")
+        st.error("Access protection is not configured. Add your password and approved device key in your hosting provider's Secrets settings before use.")
+        st.info("For security, this screen never displays saved passwords or device keys. Keep both values private and never add them to GitHub.")
         st.stop()
     if not st.session_state.get("authenticated"):
         st.title("🎯 MISSION 100")
