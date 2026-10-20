@@ -40,7 +40,7 @@ def check_access():
 check_access()
 DATA_FILE = Path("mission100_progress.json")
 def load_data():
-    default = {"done": {}, "ap": {}, "cover": {}, "custom": [], "custom_ap": [], "goals": {}, "xp": 0, "notes": "", "focus_sessions": 0, "study_minutes": 0}
+    default = {"done": {}, "ap": {}, "cover": {}, "custom": [], "custom_ap": [], "goals": {}, "dreams": [], "mistakes": [], "discipline": {}, "xp": 0, "notes": "", "focus_sessions": 0, "study_minutes": 0}
     try:
         if DATA_FILE.exists(): default.update(json.loads(DATA_FILE.read_text(encoding="utf-8")))
     except Exception: pass
@@ -118,7 +118,7 @@ covered = sum(bool(d["cover"].get(sub+"_"+str(i))) for sub, arr in syllabus.item
 c1,c2,c3,c4 = st.columns(4)
 c1.metric("Today's tasks",str(completed)+"/"+str(total)); c2.metric("XP earned",str(d.get("xp",0)))
 c3.metric("Syllabus first-pass",str(round(covered*100/total_chapters))+"%"); c4.metric("Focus sessions logged",str(d.get("focus_sessions",0)))
-tab1,tab2,tab3,tab4,tab5 = st.tabs(["Today's Mission","AP Mastery","Syllabus","Life Goals","Progress & Backup"])
+tab1,tab2,tab3,tab4,tab5,tab6,tab7,tab8,tab9 = st.tabs(["Today's Mission","AP Mastery","Syllabus","Life Goals","Focus Room","My Dreams","Mistake Book","Daily Discipline","Progress & Backup"])
 with tab1:
     st.info("Priority from your HTML: Marathi CM preparation, Arithmetic Progressions, Nationalism in India, Chemical Reactions and Equations, and protected sleep. Adjust tasks to match your actual school timetable.")
     left,right = st.columns([1.2,0.8])
@@ -203,6 +203,99 @@ with tab4:
     review=st.text_area("Weekly review: what worked, what distracted me, what will I change?",value=d.get("notes",""),height=120)
     if review != d.get("notes",""): d["notes"]=review; save()
 with tab5:
+    st.header("Focus Room")
+    st.caption("Use a focused block, take intentional breaks, and record completed sessions.")
+    focus_minutes = st.select_slider("Focus block length", options=[10,25,45,60], value=25, key="focus_room_minutes")
+    if "room_end" not in st.session_state: st.session_state.room_end=0
+    if "room_remaining" not in st.session_state: st.session_state.room_remaining=0
+    if "room_length" not in st.session_state: st.session_state.room_length=focus_minutes
+    if "room_finished" not in st.session_state: st.session_state.room_finished=False
+    room_running = st.session_state.room_end > time.time()
+    room_paused = st.session_state.room_remaining > 0 and not room_running
+    c1,c2,c3,c4 = st.columns(4)
+    if not room_running and not room_paused and c1.button("Start",type="primary",key="room_start"):
+        st.session_state.room_length=focus_minutes; st.session_state.room_end=time.time()+focus_minutes*60; st.session_state.room_finished=False; st.rerun()
+    if room_running and c2.button("Pause",key="room_pause"):
+        st.session_state.room_remaining=max(1,int(st.session_state.room_end-time.time())); st.session_state.room_end=0; st.rerun()
+    if room_paused and c1.button("Resume",type="primary",key="room_resume"):
+        st.session_state.room_end=time.time()+st.session_state.room_remaining; st.session_state.room_remaining=0; st.rerun()
+    if (room_running or room_paused) and c3.button("Stop",key="room_stop"):
+        st.session_state.room_end=0; st.session_state.room_remaining=0; st.session_state.room_finished=False; st.rerun()
+    if c4.button("Reset",key="room_reset"):
+        st.session_state.room_end=0; st.session_state.room_remaining=0; st.session_state.room_finished=False; st.rerun()
+    if room_running:
+        remaining=max(0,int(st.session_state.room_end-time.time()))
+        st.metric("Time remaining",f"{remaining//60:02d}:{remaining%60:02d}")
+        st.progress(max(0,min(1,1-remaining/(st.session_state.room_length*60))))
+        if remaining == 0:
+            st.session_state.room_end=0; st.session_state.room_remaining=0; st.session_state.room_finished=True; st.rerun()
+        time.sleep(1); st.rerun()
+    elif room_paused:
+        remaining=int(st.session_state.room_remaining)
+        st.metric("Paused",f"{remaining//60:02d}:{remaining%60:02d}")
+    elif st.session_state.room_finished:
+        st.success("Focus block completed.")
+        if st.button("Log completed session",key="room_log"):
+            d["focus_sessions"]=int(d.get("focus_sessions",0))+1
+            d["study_minutes"]=int(d.get("study_minutes",0))+int(st.session_state.room_length)
+            st.session_state.room_finished=False; save(); st.rerun()
+    st.metric("Completed focus sessions",int(d.get("focus_sessions",0)))
+    st.metric("Recorded study minutes",int(d.get("study_minutes",0)))
+
+with tab6:
+    st.header("My Dreams")
+    st.caption("Keep your long-term ambitions visible; make progress through today's actions.")
+    with st.form("dream_form",clear_on_submit=True):
+        dream_title=st.text_input("Dream or goal")
+        dream_reason=st.text_area("Why does it matter?")
+        dream_target=st.text_input("Milestone or target date (optional)")
+        if st.form_submit_button("Add dream") and dream_title.strip():
+            d.setdefault("dreams",[]).append({"id":"dream_"+str(int(time.time()*1000)),"title":dream_title.strip(),"reason":dream_reason.strip(),"target":dream_target.strip(),"done":False})
+            save(); st.rerun()
+    for dream in d.setdefault("dreams",[]):
+        with st.container(border=True):
+            checked=st.checkbox("Milestone achieved: "+dream.get("title","Untitled"),value=bool(dream.get("done",False)),key="dream_"+dream.get("id",""))
+            dream["done"]=checked
+            st.write(dream.get("reason",""))
+            if dream.get("target"): st.caption("Milestone / target: "+dream["target"])
+            if st.button("Delete dream",key="delete_"+dream.get("id","")):
+                d["dreams"]=[x for x in d["dreams"] if x.get("id")!=dream.get("id")]; save(); st.rerun()
+    save()
+
+with tab7:
+    st.header("Mistake Book")
+    st.caption("Record the question, the reason for the mistake, the correct method, and a retest date.")
+    with st.form("mistake_form",clear_on_submit=True):
+        subject=st.selectbox("Subject",["Maths","Science","SST","English","Marathi","Hindi","Sanskrit","AI"])
+        question=st.text_input("Question or topic")
+        reason=st.text_area("Why did I get it wrong?")
+        correction=st.text_area("Correct method / key learning")
+        retest=st.text_input("Retest date (optional)")
+        if st.form_submit_button("Add mistake") and question.strip():
+            d.setdefault("mistakes",[]).append({"id":"mistake_"+str(int(time.time()*1000)),"subject":subject,"question":question.strip(),"reason":reason.strip(),"correction":correction.strip(),"retest":retest.strip(),"fixed":False})
+            save(); st.rerun()
+    for mistake in d.setdefault("mistakes",[]):
+        with st.container(border=True):
+            st.subheader(mistake.get("subject","")+" — "+mistake.get("question",""))
+            st.write("**Reason:** "+mistake.get("reason",""))
+            st.write("**Correct method:** "+mistake.get("correction",""))
+            if mistake.get("retest"): st.caption("Retest: "+mistake["retest"])
+            mistake["fixed"]=st.checkbox("Retested and corrected",value=bool(mistake.get("fixed",False)),key="fixed_"+mistake.get("id",""))
+    save()
+
+with tab8:
+    st.header("Daily Discipline")
+    st.caption("Build consistency, not guilt. Tick honestly.")
+    items=[("morning","Started with a clear plan"),("maths","Completed daily Maths practice"),("revision","Revised an earlier topic"),("focus","Completed a distraction-free focus block"),("mistakes","Reviewed or corrected a mistake"),("tomorrow","Prepared tomorrow's first task")]
+    for key,label in items:
+        val=st.checkbox(label,value=bool(d.setdefault("discipline",{}).get(key,False)),key="discipline_"+key)
+        if val != bool(d["discipline"].get(key,False)): d["discipline"][key]=val; save()
+    st.subheader("Weekly reflection")
+    reflection=st.text_area("What worked, what distracted you, and what will you change?",value=d.get("notes",""),key="discipline_reflection")
+    if reflection != d.get("notes",""): d["notes"]=reflection; save()
+    st.markdown("**STAY FOCUSED. STAY DISCIPLINED. WORK HARD. 100% IS THE GOAL.**")
+
+with tab9:
     st.header("Progress and backup")
     st.write("Progress is saved in a local JSON file while the host retains it. Some hosts reset local files during restarts or redeploys, so download backups regularly.")
     st.download_button("Download progress backup",json.dumps(d,ensure_ascii=False,indent=2),file_name="mission100-progress.json",mime="application/json",type="primary")
